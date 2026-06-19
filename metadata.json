@@ -1,0 +1,6 @@
+{
+  "name": "Haazir Mobile Platform",
+  "description": "On-demand local labor applet simulator and core React Native boilerplate browser.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
