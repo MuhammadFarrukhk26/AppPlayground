@@ -22,6 +22,7 @@ import {
   Cpu, 
   Sliders, 
   ThumbsUp,
+  Check,
   Receipt,
   RotateCcw,
   Lock,
@@ -39,6 +40,8 @@ import {
   Bell
 } from 'lucide-react';
 import { BookingState, JobInvite, ActionLog, ChatMessage, AppUser } from '../types';
+import { InProgressRouteMap } from './InProgressRouteMap';
+import { LiveLocationMap } from './LiveLocationMap';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -364,7 +367,14 @@ const TRANSLATIONS = {
     decline: "Decline",
     accept_job: "Accept Job",
     specialist_desc: "Lahore local certified home repairs",
-    stage: "STAGE"
+    stage: "STAGE",
+    rate_experience: "Share Your Experience",
+    rate_detail: "Help maintain the best local technician roster",
+    submit_feedback: "Submit Rating & Close",
+    prefill_tags: "Quick tags",
+    what_solved_well: "What did the technician solve particularly well?",
+    remind_later: "Pay & View Bill first",
+    star_rating_required: "Please select a star rating!"
   },
   ur: {
     welcome: "حاضر میں خوش آمدید",
@@ -413,7 +423,14 @@ const TRANSLATIONS = {
     decline: "مسترد کریں",
     accept_job: "کام قبول کریں",
     specialist_desc: "لاہور کے تصدیق شدہ ہوم سروس اسپیشلسٹ",
-    stage: "مرحلہ"
+    stage: "مرحلہ",
+    rate_experience: "اپنا تجربہ شیئر کریں",
+    rate_detail: "ماہرین کے بہترین انتخاب کو برقرار رکھنے میں مدد کریں",
+    submit_feedback: "ریٹنگ جمع کروائیں",
+    prefill_tags: "فوری ریٹنگ ٹیگز",
+    what_solved_well: "ٹیکنیشن نے آپ کا کام کیسا کیا؟",
+    remind_later: "پہلے بل دیکھیں اور ادائیگی کریں",
+    star_rating_required: "برائے مہربانی ریٹنگ کے منتخب کریں!"
   }
 };
 
@@ -476,11 +493,13 @@ export default function PhoneSimulator({
 
   // Navigation states for Customer
   const [customerScreen, setCustomerScreen] = useState<'home' | 'booking' | 'tracking' | 'payment' | 'completed' | 'bookings'>('home');
+  const [selectedMapView, setSelectedMapView] = useState<'telemetry' | 'livelocation'>('telemetry');
   const [workerTab, setWorkerTab] = useState<'jobs' | 'insights'>('jobs');
   const [bookingFilter, setBookingFilter] = useState<'Active' | 'Completed' | 'Cancelled'>('Active');
   const [selectedCatKey, setSelectedCatKey] = useState<string>('electrician');
   const [selectedIssue, setSelectedIssue] = useState<string>('');
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [showBookingSuccessAnimation, setShowBookingSuccessAnimation] = useState(false);
 
   // Mapping of category keys to associated keywords for global search filter
   const CATEGORY_KEYWORDS: Record<string, string[]> = {
@@ -539,6 +558,7 @@ export default function PhoneSimulator({
   // Rating forms
   const [stars, setStars] = useState(5);
   const [review, setReview] = useState('');
+  const [showRatingModal, setShowRatingModal] = useState<boolean>(false);
 
   // Credit Card Payment Mockup States
   const [isPaid, setIsPaid] = useState<boolean>(false);
@@ -702,6 +722,7 @@ export default function PhoneSimulator({
     }
     onCreateBooking(selectedCatKey, customIssue, address, slot, comments);
     setCustomerScreen('tracking');
+    setShowBookingSuccessAnimation(true);
   };
 
   const handleCustomerRatingSubmit = () => {
@@ -739,11 +760,30 @@ export default function PhoneSimulator({
     }
   }, [activeBooking, isPaid]);
 
+  // Auto-show Rating Modal on Completion
+  React.useEffect(() => {
+    if (activeBooking && activeBooking.status === 'completed') {
+      setShowRatingModal(true);
+    } else {
+      setShowRatingModal(false);
+    }
+  }, [activeBooking?.status, activeBooking?.id]);
+
   React.useEffect(() => {
     if (!activeBooking) {
       setIsChatOpen(false);
     }
   }, [activeBooking]);
+
+  // Dismiss booking success overlay automatically after 3.5 seconds
+  React.useEffect(() => {
+    if (showBookingSuccessAnimation) {
+      const timer = setTimeout(() => {
+        setShowBookingSuccessAnimation(false);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [showBookingSuccessAnimation]);
 
   return (
     <div className="flex flex-col items-center">
@@ -1774,8 +1814,132 @@ export default function PhoneSimulator({
                         </div>
                       )}
 
+                      {/* Booking status visual progress bar */}
+                      {(() => {
+                        const statusOrder = ['pending', 'assigned', 'in_progress', 'completed'];
+                        const currentIdx = statusOrder.indexOf(activeBooking.status);
+                        
+                        let percentage = 15;
+                        if (activeBooking.status === 'assigned') percentage = 45;
+                        else if (activeBooking.status === 'in_progress') percentage = 75;
+                        else if (activeBooking.status === 'completed') percentage = 100;
+
+                        const steps = [
+                          { label: language === 'en' ? 'Posted' : 'پوسٹڈ', val: 'pending', labelSub: language === 'en' ? 'Finding Tech' : 'تلاش جاری' },
+                          { label: language === 'en' ? 'On Way' : 'ڈیسپیچ', val: 'assigned', labelSub: language === 'en' ? 'Heading over' : 'روانہ ہو گئے' },
+                          { label: language === 'en' ? 'Active' : 'کام شروع', val: 'in_progress', labelSub: language === 'en' ? 'Repairing' : 'مرمت جاری' },
+                          { label: language === 'en' ? 'Done' : 'مکمل', val: 'completed', labelSub: language === 'en' ? 'Receipt Ready' : 'رسید تیار' }
+                        ];
+
+                        return (
+                          <div className={`mb-4 border rounded-2xl p-3.5 ${
+                            isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50/50 border-slate-150'
+                          }`}>
+                            <div className="flex items-center justify-between mb-3">
+                              <span className={`text-[10px] font-black uppercase tracking-wider ${
+                                isDarkMode ? 'text-slate-350' : 'text-slate-500'
+                              }`}>
+                                {language === 'en' ? 'Work Status Progress' : 'سروس کی مجموعی صورتحال'}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className="relative flex h-1.5 w-1.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-teal-500"></span>
+                                </span>
+                                <span className={`text-[9.5px] font-extrabold ${isDarkMode ? 'text-teal-400' : 'text-teal-700'}`}>
+                                  {percentage}% {language === 'en' ? 'COMPLETED' : 'مکمل'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Linear Progress bar slide-indicator */}
+                            <div className="relative h-2.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-4">
+                              <div 
+                                className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-teal-500 to-teal-405 bg-teal-605 bg-teal-650 bg-teal-600 transition-all duration-1000 ease-out rounded-full shadow-inner"
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+
+                            {/* Stepper Nodes */}
+                            <div className="flex justify-between items-start gap-1 relative">
+                              {steps.map((st, sidx) => {
+                                const isDone = currentIdx >= sidx;
+                                const isActive = currentIdx === sidx;
+
+                                return (
+                                  <div key={st.val} className="flex-1 flex flex-col items-center text-center">
+                                    <div className="relative mb-2">
+                                      {isActive && (
+                                        <span className="absolute -inset-1.5 rounded-full bg-teal-400/30 animate-pulse opacity-65" />
+                                      )}
+                                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border transition-all duration-500 ${
+                                        isDone
+                                          ? 'bg-teal-650 border-teal-550 text-white shadow-xs bg-teal-600 border-teal-500'
+                                          : isDarkMode
+                                            ? 'bg-slate-950 border-slate-800 text-slate-650'
+                                            : 'bg-white border-slate-200 text-slate-400'
+                                      }`}>
+                                        {isDone ? '✓' : sidx + 1}
+                                      </div>
+                                    </div>
+                                    <span className={`text-[9px] font-black block leading-none truncate w-full max-w-[58px] ${
+                                      isActive 
+                                        ? 'text-teal-650 dark:text-teal-400' 
+                                        : isDone 
+                                          ? 'text-slate-800 dark:text-slate-200' 
+                                          : 'text-slate-400 dark:text-slate-600'
+                                    }`}>
+                                      {st.label}
+                                    </span>
+                                    <span className={`text-[7px] font-medium block mt-0.5 leading-none whitespace-nowrap opacity-80 ${
+                                      isActive ? 'font-black text-rose-500' : 'text-slate-400 dark:text-slate-500'
+                                    }`}>
+                                      {st.labelSub}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* MAP SWITCHER SEGMENTS */}
+                      <div className="flex gap-1 mb-2.5 p-1 rounded-xl bg-slate-950/25 border border-slate-200 dark:border-slate-800/80">
+                        <button
+                          onClick={() => setSelectedMapView('telemetry')}
+                          className={`flex-1 text-center py-1.5 px-2 rounded-lg font-extrabold text-[8.5px] uppercase tracking-wider transition-all cursor-pointer ${
+                            selectedMapView === 'telemetry'
+                              ? 'bg-teal-600 text-white shadow-xs'
+                              : isDarkMode
+                                ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                                : 'text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          🌐 {language === 'en' ? 'Live Dispatch' : 'لائیو ڈیسپیچ'}
+                        </button>
+                        <button
+                          onClick={() => setSelectedMapView('livelocation')}
+                          className={`flex-1 text-center py-1.5 px-2 rounded-lg font-extrabold text-[8.5px] uppercase tracking-wider transition-all cursor-pointer ${
+                            selectedMapView === 'livelocation'
+                              ? 'bg-teal-600 text-white shadow-xs'
+                              : isDarkMode
+                                ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                                : 'text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          📍 {language === 'en' ? 'Live Location' : 'لائیو لوکیشن'}
+                        </button>
+                      </div>
+
                       {/* GRID COORDINATES MAP ROUTE VISUALIZATION */}
-                      <CoordinateGridMap booking={activeBooking} />
+                      {selectedMapView === 'livelocation' ? (
+                        <LiveLocationMap booking={activeBooking} isDarkMode={isDarkMode} language={language} />
+                      ) : activeBooking.status === 'in_progress' ? (
+                        <InProgressRouteMap booking={activeBooking} isDarkMode={isDarkMode} language={language} />
+                      ) : (
+                        <CoordinateGridMap booking={activeBooking} />
+                      )}
 
                       {/* Tracker map visual steps */}
                       <div className={`border rounded-2xl p-3.5 space-y-4 ${isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200'}`}>
@@ -2615,8 +2779,42 @@ export default function PhoneSimulator({
                             </div>
                           </div>
 
+                          {/* MAP SWITCHER SEGMENTS */}
+                          <div className="flex gap-1 mb-2.5 mt-2.5 p-1 rounded-xl bg-slate-950/25 border border-slate-200 dark:border-slate-800/80">
+                            <button
+                              onClick={() => setSelectedMapView('telemetry')}
+                              className={`flex-1 text-center py-1 rounded-md font-extrabold text-[8.5px] uppercase tracking-wider transition-all cursor-pointer ${
+                                selectedMapView === 'telemetry'
+                                  ? 'bg-teal-600 text-white shadow-xs'
+                                  : isDarkMode
+                                    ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                                    : 'text-slate-600 hover:bg-slate-200'
+                              }`}
+                            >
+                              🌐 {language === 'en' ? 'Live Dispatch' : 'لائیو ڈیسپیچ'}
+                            </button>
+                            <button
+                              onClick={() => setSelectedMapView('livelocation')}
+                              className={`flex-1 text-center py-1 rounded-md font-extrabold text-[8.5px] uppercase tracking-wider transition-all cursor-pointer ${
+                                selectedMapView === 'livelocation'
+                                  ? 'bg-teal-600 text-white shadow-xs'
+                                  : isDarkMode
+                                    ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                                    : 'text-slate-600 hover:bg-slate-200'
+                              }`}
+                            >
+                              📍 {language === 'en' ? 'Live Location' : 'لائیو لوکیشن'}
+                            </button>
+                          </div>
+
                           {/* SERVICE DISPATCH COORDINATE TRACKER */}
-                          <CoordinateGridMap booking={activeBooking} />
+                          {selectedMapView === 'livelocation' ? (
+                            <LiveLocationMap booking={activeBooking} isDarkMode={isDarkMode} language={language} />
+                          ) : activeBooking.status === 'in_progress' ? (
+                            <InProgressRouteMap booking={activeBooking} isDarkMode={isDarkMode} language={language} />
+                          ) : (
+                            <CoordinateGridMap booking={activeBooking} />
+                          )}
 
                           {/* Worker Action buttons grid */}
                           <div className="grid grid-cols-2 gap-2 mt-3">
@@ -2900,6 +3098,201 @@ export default function PhoneSimulator({
 
               </div>
             )}
+
+          {/* Booking Success Animation Overlay */}
+          {showBookingSuccessAnimation && (
+            <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md z-[110] flex flex-col items-center justify-center p-6 text-center select-none animate-fade-in pointer-events-auto">
+              {/* Confetti element decoration */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
+                <span className="absolute top-12 left-1/4 w-1.5 h-1.5 bg-yellow-400 rounded-full animate-ping delay-75" />
+                <span className="absolute top-1/4 right-8 w-2 h-2 bg-pink-500 rotate-12 rounded-xs animate-bounce" />
+                <span className="absolute bottom-24 left-12 w-1.5 h-3 bg-teal-400 -rotate-45 rounded-full animate-bounce delay-300" />
+                <span className="absolute bottom-1/3 right-1/4 w-2 h-1 bg-amber-400 rotate-45 animate-ping delay-500" />
+              </div>
+
+              {/* Pulsing Outer rings */}
+              <div className="relative mb-6 flex items-center justify-center">
+                <div className="absolute w-28 h-28 bg-teal-500/10 rounded-full animate-ring-pulse duration-2000" />
+                <div className="absolute w-20 h-20 bg-teal-500/20 rounded-full animate-ring-pulse delay-500" />
+                
+                {/* The main scaling ball */}
+                <div className="w-16 h-16 rounded-full bg-teal-600 flex items-center justify-center text-white border-2 border-teal-400/30 shadow-2xl animate-scale-up-bounce">
+                  {/* Big Check icon from lucide-react */}
+                  <Check className="text-white stroke-[4]" size={28} />
+                </div>
+              </div>
+
+              {/* Text descriptions in English & Urdu */}
+              <h3 className="text-sm font-black text-white uppercase tracking-wider mb-2">
+                {language === 'en' ? 'Request Placed!' : 'درخواست کامیابی سے موصول ہوئی'}
+              </h3>
+              
+              <p className="text-[10px] text-slate-300 font-medium leading-relaxed max-w-[190px] mx-auto mb-6">
+                {language === 'en' 
+                  ? 'Your expert Haazir specialist is being recruited. Track dispatch in real-time!' 
+                  : 'آپ کے لیے بہترین سروس فراہم کنندہ تلاش کیا جا رہا ہے۔ لائیو صورتحال دیکھیں۔'}
+              </p>
+
+              {/* Dismiss Button */}
+              <button
+                onClick={() => setShowBookingSuccessAnimation(false)}
+                className="bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-[10px] uppercase tracking-wider py-2.5 px-6 rounded-xl transition-all cursor-pointer shadow-md shadow-teal-700/20 active:scale-95 flex items-center gap-1.5"
+              >
+                <span>{language === 'en' ? 'Track Dispatch' : 'لائیو ٹریک کریں'}</span>
+                <ArrowRight size={11} />
+              </button>
+            </div>
+          )}
+
+          {/* Rate Experience Modal Pop-up */}
+          {showRatingModal && role === 'customer' && activeBooking && (
+            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs z-[100] flex items-end justify-center animate-fade-in pointer-events-auto">
+              <div 
+                className={`w-full max-h-[85%] rounded-t-[32px] p-5 pb-8 flex flex-col justify-between text-left shadow-2xl animate-slide-up ${
+                  isDarkMode ? 'bg-slate-900 border-t border-slate-800 text-white' : 'bg-white border-t border-slate-200'
+                }`}
+              >
+                <div>
+                  {/* Decorative grab-handle */}
+                  <div className="w-10 h-1 bg-slate-400/20 rounded-full mx-auto mb-4" />
+
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className={`text-xs font-black uppercase tracking-wider ${isDarkMode ? 'text-teal-400' : 'text-teal-650'}`}>
+                      {t('rate_experience')}
+                    </h3>
+                    <button 
+                      onClick={() => setShowRatingModal(false)}
+                      className={`text-sm font-bold border rounded-full w-6 h-6 flex items-center justify-center cursor-pointer transition-colors ${
+                        isDarkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800' : 'border-slate-150 text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                      }`}
+                    >
+                      &times;
+                    </button>
+                  </div>
+
+                  {/* Vetted Worker Badge Card */}
+                  <div className={`p-3 rounded-2xl border flex items-center gap-3 mb-4 ${
+                    isDarkMode ? 'bg-slate-950 border-slate-850' : 'bg-slate-50 border-slate-150'
+                  }`}>
+                    <div className="w-10 h-10 rounded-full bg-teal-500/10 flex items-center justify-center font-bold text-teal-650 border border-teal-500/20 text-xs shrink-0 select-none">
+                      {activeBooking.provider?.name?.split(' ').map((n: string) => n[0]).join('') || 'AK'}
+                    </div>
+                    <div>
+                      <div className={`font-black text-[11px] flex items-center gap-1 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                        <span>{activeBooking.provider?.name || 'Ahmed Kamal'}</span>
+                        <span className="text-teal-650 font-black">✓</span>
+                      </div>
+                      <p className="text-[9.5px] text-slate-400 font-bold uppercase leading-none mt-0.5">
+                        {activeBooking.service} Specialist
+                      </p>
+                    </div>
+                    <div className="ml-auto text-right">
+                      <span className="text-[8px] text-slate-400 block font-bold uppercase">Cash Due</span>
+                      <span className={`text-[10px] font-black ${isDarkMode ? 'text-teal-400' : 'text-teal-650'}`}>
+                        PKR {activeBooking.price.total * 100}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Interactive Stars selector */}
+                  <div className="text-center mb-4 select-none">
+                    <p className="text-[9.5px] text-slate-400 font-extrabold uppercase tracking-wider mb-2">
+                      {language === 'en' ? 'How was the service?' : 'سروس کیسی رہی؟'}
+                    </p>
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setStars(s)}
+                          className="hover:scale-115 active:scale-90 transition-all cursor-pointer"
+                        >
+                          <Star 
+                            size={28} 
+                            className={s <= stars ? 'text-amber-400 fill-amber-400 drop-shadow-sm' : isDarkMode ? 'text-slate-800' : 'text-slate-200'} 
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    <span className={`text-[11px] font-extrabold block text-center min-h-[16px] ${stars >= 4 ? 'text-teal-650' : stars === 3 ? 'text-amber-500' : 'text-rose-500'}`}>
+                      {stars === 5 ? (language === 'en' ? '⭐⭐⭐⭐⭐ Excellent service!' : '⭐⭐⭐⭐⭐ زبردست کام!') :
+                       stars === 4 ? (language === 'en' ? '⭐⭐⭐⭐ Very Good!' : '⭐⭐⭐⭐ بہت اچھا!') :
+                       stars === 3 ? (language === 'en' ? '⭐⭐⭐ Average' : '⭐⭐⭐ اوسط') :
+                       stars === 2 ? (language === 'en' ? '⭐⭐ Fair' : '⭐⭐ مناسب') :
+                       (language === 'en' ? '⭐ Poor' : '⭐ ناقص')}
+                    </span>
+                  </div>
+
+                  {/* Quick comment feedback chips */}
+                  <div className="mb-4">
+                    <p className={`text-[9px] uppercase tracking-wider font-extrabold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {t('prefill_tags')}
+                    </p>
+                    <div className="flex flex-wrap gap-1 md:gap-1.5 justify-start max-h-[50px] overflow-y-auto no-scrollbar">
+                      {[
+                        { text: language === 'en' ? "⚡ Fast Service" : "⚡ بہت تیز کام", textTemplate: language === 'en' ? "Highly efficient and completed target work very fast." : "ٹیگ: بہت ہی تیز رفتار اور موثر کام۔" },
+                        { text: language === 'en' ? "💯 Extremely Pro" : "💯 انتہائی پیشہ ور", textTemplate: language === 'en' ? "Extremely professional skill and tools. Completely satisfied." : "ٹیگ: انتہائی پیشہ ورانہ اور بہترین مہارت۔" },
+                        { text: language === 'en' ? "🤝 Polite behavior" : "🤝 اچھا رویہ", textTemplate: language === 'en' ? "Amazing behavior and polite specialist." : "ٹیگ: بہت شائستہ اور اچھا رویہ تھا۔" },
+                        { text: language === 'en' ? "🛠️ Perfect cleanup" : "🛠️ صاف ستھرا کام", textTemplate: language === 'en' ? "Clean repair cleanup after work completion." : "ٹیگ: صفائی ستھرائی کے ساتھ کام مکمل کیا۔" }
+                      ].map((tag, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            setReview(prev => {
+                              const cleanPrev = prev.trim();
+                              return cleanPrev ? `${cleanPrev} ${tag.textTemplate}` : tag.textTemplate;
+                            });
+                          }}
+                          className={`text-[9px] font-bold px-2 py-1 rounded-lg border transition-all active:scale-95 cursor-pointer leading-none ${
+                            isDarkMode 
+                              ? 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800' 
+                              : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                          }`}
+                        >
+                          {tag.text}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Review Textbox Input */}
+                  <div className="mb-5">
+                    <textarea
+                      rows={2}
+                      value={review}
+                      onChange={(e) => setReview(e.target.value)}
+                      placeholder={language === 'en' ? "Add any details about repair outcome..." : "مرمت کے حوالے سے مزید معلومات شامل کریں..."}
+                      className={`w-full border rounded-xl p-2 px-3 text-2xs focus:ring-1 focus:ring-teal-500 focus:outline-none h-[48px] text-left transition-colors duration-150 ${
+                        isDarkMode ? 'bg-slate-950 border-slate-850 text-white placeholder-slate-700' : 'bg-slate-50 border-slate-200 text-slate-850 placeholder-slate-400'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 shrink-0">
+                  <button
+                    onClick={() => {
+                      handleCustomerRatingSubmit();
+                      setShowRatingModal(false);
+                    }}
+                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-2xs py-2.5 rounded-xl transition-all cursor-pointer shadow-sm active:scale-98 animate-pulse"
+                  >
+                    {t('submit_feedback')}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowRatingModal(false);
+                    }}
+                    className={`w-full text-center py-2 rounded-xl font-bold text-3xs transition-colors cursor-pointer ${
+                      isDarkMode ? 'bg-slate-850 hover:bg-slate-850/80 text-slate-400' : 'bg-slate-100 hover:bg-slate-200/80 text-slate-500'
+                    }`}
+                  >
+                    {t('remind_later')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           </div>
 
