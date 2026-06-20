@@ -21,7 +21,10 @@
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
       },
-      "package": "com.haazir.laborapp"
+      "package": "com.haazir.laborapp",
+      "permissions": [
+        "android.permission.DETECT_SCREEN_CAPTURE"
+      ]
     },
     "web": {
       "favicon": "./src/assets/favicon.png"
