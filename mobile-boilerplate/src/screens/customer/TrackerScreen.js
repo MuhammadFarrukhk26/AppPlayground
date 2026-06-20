@@ -127,6 +127,45 @@ export default function TrackerScreen({ navigation }) {
 
         {activeBooking.status !== 'completed' ? (
           <>
+            {/* INTERACTIVE MOCK MAP ROUTING VISUALIZER */}
+            <View style={styles.mapCard}>
+              <Text style={styles.mapHeaderTitle}>Live Route Tracking</Text>
+              <View style={styles.mapCanvas}>
+                {/* Streets backplane representation */}
+                <View style={styles.mapGridLineH} />
+                <View style={styles.mapGridLineV} />
+                
+                {/* Sector tags */}
+                <Text style={styles.mapSectorLabel}>LAHORE DHA SEC T</Text>
+                
+                {/* Destination Point (Home) */}
+                <View style={styles.destinationMarker}>
+                  <View style={styles.pulseIndicator} />
+                  <Ionicons name="home" size={20} color="#FF3B30" />
+                  <Text style={styles.markerText}>Customer (Home)</Text>
+                </View>
+
+                {/* Technician route progress coordinate layout values based on status context */}
+                {activeBooking.status === 'pending' ? (
+                  <View style={styles.radarGroup}>
+                    <View style={styles.glowingRadarCircle} />
+                    <Ionicons name="sync-outline" size={28} color="#007AFF" />
+                    <Text style={styles.radarSubText}>Broadcasting live ticket...</Text>
+                  </View>
+                ) : activeBooking.status === 'assigned' ? (
+                  <View style={[styles.workerMarkerAnimated, { bottom: '25%', left: '20%' }]}>
+                    <Ionicons name="bicycle-sharp" size={24} color="#007AFF" />
+                    <Text style={styles.workerMarkerText}>{activeBooking.provider?.name || 'Ahmed Kamal'} (En Route)</Text>
+                  </View>
+                ) : activeBooking.status === 'in_progress' ? (
+                  <View style={[styles.workerMarkerAnimated, { top: '15%', right: '23%' }]}>
+                    <Ionicons name="construct-sharp" size={22} color="#34C759" />
+                    <Text style={[styles.workerMarkerText, { color: '#34C759', borderColor: '#34C759' }]}>Specialist On-Site</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+
             {/* TIMELINE TRACKER COMPONENT */}
             <View style={styles.trackingCard}>
               <Text style={styles.trackingCardHeader}>Tracking Status</Text>
@@ -201,10 +240,16 @@ export default function TrackerScreen({ navigation }) {
                   </View>
                 </View>
                 <View style={styles.contactActions}>
-                  <TouchableOpacity style={styles.contactCircleBtn}>
+                  <TouchableOpacity 
+                    style={styles.contactCircleBtn}
+                    onPress={() => alert(`Calling specialist: ${activeBooking.provider.phone}`)}
+                  >
                     <Ionicons name="call" size={18} color="#007AFF" />
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.contactCircleBtn, { marginLeft: 8 }]}>
+                  <TouchableOpacity 
+                    style={[styles.contactCircleBtn, { marginLeft: 8 }]}
+                    onPress={() => navigation.navigate('ChatScreen')}
+                  >
                     <Ionicons name="chatbubble" size={18} color="#FF3B30" />
                   </TouchableOpacity>
                 </View>
@@ -732,5 +777,118 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  mapCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    marginBottom: 16,
+  },
+  mapHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 12,
+  },
+  mapCanvas: {
+    height: 160,
+    backgroundColor: '#EAF4FE',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D0E5FC',
+    overflow: 'hidden',
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapGridLineH: {
+    position: 'absolute',
+    top: '55%',
+    left: 0,
+    right: 0,
+    height: 6,
+    backgroundColor: '#FFFFFF',
+    opacity: 0.8,
+  },
+  mapGridLineV: {
+    position: 'absolute',
+    left: '65%',
+    top: 0,
+    bottom: 0,
+    width: 6,
+    backgroundColor: '#FFFFFF',
+    opacity: 0.8,
+  },
+  mapSectorLabel: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    fontSize: 9,
+    color: '#007AFF',
+    fontWeight: '800',
+    opacity: 0.5,
+  },
+  destinationMarker: {
+    position: 'absolute',
+    top: '15%',
+    right: '25%',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  pulseIndicator: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FF3B30',
+    opacity: 0.15,
+    top: -6,
+  },
+  markerText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FF3B30',
+    marginTop: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    paddingHorizontal: 4,
+    borderRadius: 4,
+  },
+  radarGroup: {
+    alignItems: 'center',
+  },
+  glowingRadarCircle: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 1.5,
+    borderColor: '#007AFF',
+    opacity: 0.3,
+    top: -16,
+  },
+  radarSubText: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  workerMarkerAnimated: {
+    position: 'absolute',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  workerMarkerText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#007AFF',
+    marginTop: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#D0E5FC',
   },
 });

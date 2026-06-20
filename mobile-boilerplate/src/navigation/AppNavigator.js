@@ -14,6 +14,8 @@ import TrackerScreen from '../screens/customer/TrackerScreen';
 import BookingScreen from '../screens/customer/BookingScreen';
 import WorkerDashboard from '../screens/worker/WorkerDashboard';
 import JobDetailsScreen from '../screens/worker/JobDetailsScreen';
+import AuthScreen from '../screens/auth/AuthScreen';
+import ChatScreen from '../screens/chat/ChatScreen';
 
 // Create Navigation Instances
 const Stack = createNativeStackNavigator();
@@ -81,21 +83,34 @@ const CustomerTabNavigator = () => {
   );
 };
 
-// Dummy profile screen for completeness
+// Profile screen showing the actual logged-in user
 const ProfileDummyScreen = () => {
-  const { switchRole } = useBooking();
+  const { currentUser, switchRole, logoutUser } = useBooking();
+  if (!currentUser) return null;
+
   return (
     <View style={styles.centerContainer}>
-      <Ionicons name="person-circle" size={80} color="#AEAEB2" />
-      <Text style={styles.titleText}>Ayesha Khan</Text>
-      <Text style={styles.subtitleText}>+92 321 9876543</Text>
-      
+      <Ionicons name="person-circle" size={90} color="#FF3B30" style={{ marginBottom: 10 }} />
+      <Text style={styles.titleText}>{currentUser.name}</Text>
+      <Text style={styles.subtitleText}>{currentUser.email}</Text>
+      <Text style={[styles.subtitleText, { marginTop: -14 }]}>{currentUser.phone}</Text>
+
       <TouchableOpacity 
         style={styles.switchButton} 
-        onPress={() => switchRole('worker')}
+        onPress={() => switchRole(currentUser.role === 'customer' ? 'worker' : 'customer')}
       >
         <Ionicons name="swap-horizontal" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-        <Text style={styles.switchButtonText}>Switch to Worker Mode</Text>
+        <Text style={styles.switchButtonText}>
+          Switch to {currentUser.role === 'customer' ? 'Worker View' : 'Customer View'}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={[styles.switchButton, { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FF3B30', marginTop: 14 }]} 
+        onPress={logoutUser}
+      >
+        <Ionicons name="log-out" size={18} color="#FF3B30" style={{ marginRight: 8 }} />
+        <Text style={[styles.switchButtonText, { color: '#FF3B30' }]}>Sign Out</Text>
       </TouchableOpacity>
     </View>
   );
@@ -104,12 +119,15 @@ const ProfileDummyScreen = () => {
 // ROOT STACK NAVIGATOR
 // Evaluates which role is currently configured and handles deep page stacks (like Booking modal, Job details)
 export default function AppNavigator() {
-  const { userRole } = useBooking();
+  const { currentUser, userRole } = useBooking();
 
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {userRole === 'customer' ? (
+        {!currentUser ? (
+          // AUTHENTICATION FLOW
+          <Stack.Screen name="AuthScreen" component={AuthScreen} />
+        ) : userRole === 'customer' ? (
           // CUSTOMER STACK
           <>
             <Stack.Screen name="CustomerRoot" component={CustomerTabNavigator} />
@@ -119,6 +137,17 @@ export default function AppNavigator() {
               options={{ 
                 headerShown: true, 
                 title: 'Schedule Service',
+                headerStyle: styles.header,
+                headerTintColor: '#1C1C1E',
+                headerTitleStyle: styles.headerTitle,
+              }}
+            />
+            <Stack.Screen 
+              name="ChatScreen" 
+              component={ChatScreen} 
+              options={{ 
+                headerShown: true, 
+                title: 'Chat with Specialist',
                 headerStyle: styles.header,
                 headerTintColor: '#1C1C1E',
                 headerTitleStyle: styles.headerTitle,
@@ -135,6 +164,17 @@ export default function AppNavigator() {
               options={{ 
                 headerShown: true, 
                 title: 'Job Invitation Detail',
+                headerStyle: styles.header,
+                headerTintColor: '#1C1C1E',
+                headerTitleStyle: styles.headerTitle,
+              }}
+            />
+            <Stack.Screen 
+              name="ChatScreen" 
+              component={ChatScreen} 
+              options={{ 
+                headerShown: true, 
+                title: 'Chat with Customer',
                 headerStyle: styles.header,
                 headerTintColor: '#1C1C1E',
                 headerTitleStyle: styles.headerTitle,

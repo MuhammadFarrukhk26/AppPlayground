@@ -116,6 +116,29 @@ export default function WorkerDashboard({ navigation }) {
                 <Text style={styles.addressLocationText}>{activeBooking.address}</Text>
               </View>
 
+              {/* Polish Client Contact Panel */}
+              <View style={styles.clientContactRow}>
+                <Ionicons name="person-circle-sharp" size={38} color="#FF3B30" style={{ marginRight: 8 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.clientSubLabel}>Contact Client</Text>
+                  <Text style={styles.clientNameLabel}>{activeBooking.customerName || 'Ayesha Khan'}</Text>
+                </View>
+                <View style={styles.clientActionsGroup}>
+                  <TouchableOpacity 
+                    style={styles.clientActionBtn}
+                    onPress={() => alert(`Dialing customer: ${activeBooking.customerPhone || '+92 321 9876543'}`)}
+                  >
+                    <Ionicons name="call" size={15} color="#007AFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.clientActionBtn, { backgroundColor: '#FFF1F0', marginLeft: 8 }]}
+                    onPress={() => navigation.navigate('ChatScreen')}
+                  >
+                    <Ionicons name="chatbubble" size={15} color="#FF3B30" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               <View style={styles.instructionContainer}>
                 <Text style={styles.instructionLabel}>Notes from customer:</Text>
                 <Text style={styles.instructionContent}>{activeBooking.description || 'No special instructions given.'}</Text>
@@ -539,5 +562,37 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  clientContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFC',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+  },
+  clientSubLabel: {
+    fontSize: 10,
+    color: '#8E8E93',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  clientNameLabel: {
+    fontSize: 13,
+    fontWeight: '750',
+    color: '#1C1C1E',
+  },
+  clientActionsGroup: {
+    flexDirection: 'row',
+  },
+  clientActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F2F2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

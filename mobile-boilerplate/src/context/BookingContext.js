@@ -22,6 +22,14 @@ const MOCK_WORKER = {
 };
 
 export const BookingProvider = ({ children }) => {
+  // Current logged in User (null if signed out)
+  const [currentUser, setCurrentUser] = useState({
+    name: 'Ayesha Khan',
+    phone: '+92 321 9876543',
+    role: 'customer',
+    email: 'ayesha@gmail.com',
+  });
+
   // App Roles: 'customer' or 'worker'
   const [userRole, setUserRole] = useState('customer');
 
@@ -31,6 +39,9 @@ export const BookingProvider = ({ children }) => {
   // Active customer booking: null, or { service, subService, address, slot, description, status, price, provider }
   // Status stages: 'pending' (searching worker) -> 'assigned' (worker accepted) -> 'in_progress' -> 'completed'
   const [activeBooking, setActiveBooking] = useState(null);
+
+  // Chat message stream for active booking
+  const [chatMessages, setChatMessages] = useState([]);
 
   // Incoming job applications/invitations for the service provider
   const [jobInvites, setJobInvites] = useState([]);
@@ -50,6 +61,28 @@ export const BookingProvider = ({ children }) => {
     ]);
   };
 
+  // Auth helper methods
+  const loginUser = (name, phone, role, email) => {
+    const freshUser = {
+      name: name || 'User',
+      phone: phone || '+92 300 0000000',
+      role: role || 'customer',
+      email: email || 'user@haazir.com',
+    };
+    setCurrentUser(freshUser);
+    setUserRole(role);
+    addLog(`User logged in: "${freshUser.name}" as ${role.toUpperCase()}`);
+  };
+
+  const logoutUser = () => {
+    const oldName = currentUser?.name || 'User';
+    setCurrentUser(null);
+    setChatMessages([]);
+    setJobInvites([]);
+    setIsWorkerOnline(false);
+    addLog(`User "${oldName}" logged out.`);
+  };
+
   // Sync state: When a new pending booking is created, make it available as a Job Invite for the Worker Flow
   useEffect(() => {
     if (activeBooking && activeBooking.status === 'pending') {
@@ -61,8 +94,8 @@ export const BookingProvider = ({ children }) => {
         slot: activeBooking.slot,
         description: activeBooking.description,
         price: activeBooking.price,
-        customerName: 'Ayesha Khan',
-        customerPhone: '+92 321 9876543',
+        customerName: currentUser?.name || 'Ayesha Khan',
+        customerPhone: currentUser?.phone || '+92 321 9876543',
         distance: '1.2 km away',
       };
       setJobInvites([newInvite]);
@@ -70,12 +103,58 @@ export const BookingProvider = ({ children }) => {
     } else if (!activeBooking) {
       setJobInvites([]);
     }
-  }, [activeBooking]);
+  }, [activeBooking, currentUser]);
 
   // Method to toggle roles (Customer vs Worker) for a unified view
   const switchRole = (role) => {
     setUserRole(role);
+    if (currentUser) {
+      setCurrentUser(prev => ({ ...prev, role }));
+    }
     addLog(`Switched user role view to: "${role.toUpperCase()}"`);
+  };
+
+  // Chat support handler which triggers a realistic simulated technician reply after sending messages
+  const sendChatMessage = (sender, text) => {
+    if (!text.trim()) return;
+    const newMessage = {
+      id: Date.now().toString(),
+      sender,
+      text,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setChatMessages((prev) => [...prev, newMessage]);
+    addLog(`[Chat] ${sender === 'customer' ? 'Customer' : 'Worker'}: "${text}"`);
+
+    // Simulated response logic
+    if (sender === 'customer' && activeBooking && activeBooking.provider) {
+      setTimeout(() => {
+        let replyText = "Ji, I am on my way. Be there in a few minutes.";
+        const lowerText = text.toLowerCase();
+        
+        if (lowerText.includes('price') || lowerText.includes('rate') || lowerText.includes('money') || lowerText.includes('charges')) {
+          replyText = "The base visit rate is PKR 1,500. Any extra materials/repair tasks will be quoted after diagnosing the site.";
+        } else if (lowerText.includes('hello') || lowerText.includes('aoa') || lowerText.includes('assalam') || lowerText.includes('hi')) {
+          replyText = "Assalam-o-Alaikum! Hope you are doing well. I have gathered my gear and am heading to your location.";
+        } else if (lowerText.includes('where') || lowerText.includes('time') || lowerText.includes('late') || lowerText.includes('reaching')) {
+          replyText = "I'm passing through the nearby boulevard in DHA, should reach your street in about 5 to 10 minutes.";
+        } else if (lowerText.includes('ac') || lowerText.includes('fan') || lowerText.includes('leak') || lowerText.includes('short')) {
+          replyText = "Understood. Please keep the main power switch turned off on that board for safety while I travel.";
+        }
+
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            sender: 'worker',
+            text: replyText,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+        addLog(`[Chat] Worker Ahmed Kamal: "${replyText}"`);
+      }, 1400);
+    }
   };
 
   // Create a new Booking (initiated by customer)
@@ -106,6 +185,7 @@ export const BookingProvider = ({ children }) => {
     };
 
     setActiveBooking(newBooking);
+    setChatMessages([]);
     addLog(`Customer raised new request ${newBooking.id} for "${newBooking.service}"`);
     return newBooking;
   };
@@ -116,6 +196,7 @@ export const BookingProvider = ({ children }) => {
       addLog(`Booking ${activeBooking.id} cancelled by Customer.`);
       setActiveBooking(null);
       setJobInvites([]);
+      setChatMessages([]);
     }
   };
 
@@ -139,6 +220,17 @@ export const BookingProvider = ({ children }) => {
 
     setActiveBooking(updatedBooking);
     setJobInvites([]); // Clear the invitation card now that it's accepted
+
+    // Populate the beautiful initial chat log Welcome text
+    setChatMessages([
+      {
+        id: 'welcome-msg',
+        sender: 'worker',
+        text: `Assalam-o-Alaikum! My name is ${MOCK_WORKER.name}. I have accepted your request. I am gathering my tools and will head to your location shortly.`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }
+    ]);
+
     addLog(`Worker "${MOCK_WORKER.name}" ACCEPT_JOB for request ${inviteId}`);
   };
 
@@ -185,16 +277,22 @@ export const BookingProvider = ({ children }) => {
     setBookingHistory((prev) => [completedRecord, ...prev]);
     addLog(`Customer rated service (${rating} Stars). Transaction ${activeBooking.id} archived successfully.`);
     setActiveBooking(null); // Reset active state for next cycle
+    setChatMessages([]);
   };
 
   return (
     <BookingContext.Provider
       value={{
+        currentUser,
+        loginUser,
+        logoutUser,
         userRole,
         switchRole,
         isWorkerOnline,
         toggleWorkerOnline,
         activeBooking,
+        chatMessages,
+        sendChatMessage,
         jobInvites,
         bookingHistory,
         actionLogs,
