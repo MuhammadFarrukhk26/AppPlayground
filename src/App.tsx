@@ -28,391 +28,324 @@ export default function App() {
   const [isWorkerOnline, setIsWorkerOnline] = useState<boolean>(true);
   const [jobInvites, setJobInvites] = useState<JobInvite[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [allBookings, setAllBookings] = useState<BookingState[]>([]);
+  const [customerUser, setCustomerUser] = useState<AppUser | null>(null);
+  const [workerUser, setWorkerUser] = useState<AppUser | null>(null);
+  const [usersDB, setUsersDB] = useState<any[]>([]);
+  const [logs, setLogs] = useState<ActionLog[]>([]);
 
-  // Synchronized simulation bookings log list
-  const [allBookings, setAllBookings] = useState<BookingState[]>([
-    {
-      id: 'HZ-89241',
-      service: 'ELECTRICIAN',
-      serviceKey: 'electrician',
-      subService: 'Ceiling Fan Repair & Swapping',
-      address: 'DHA Phase 5, Block T, House 42, Lahore',
-      slot: 'Yesterday, 04:00 PM',
-      description: 'The fan is making clicking noise and speed regulator is broken.',
-      status: 'completed',
-      price: {
-        base: 15,
-        work: 20,
-        tax: 2,
-        total: 37,
-      },
-      provider: {
-        id: 'work-1',
-        name: 'Ahmed Kamal',
-        avatar: 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=150&q=80',
-        phone: '0300-7654321',
-        rating: 4.88,
-        trips: 342,
-        specialty: 'Electrician Specialist',
-      },
-      createdAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
-    },
-    {
-      id: 'HZ-31045',
-      service: 'PLUMBER',
-      serviceKey: 'plumber',
-      subService: 'Master Bathroom Shower Mixer Leakage',
-      address: 'Bahria Town, Sector D, Villa 15, Lahore',
-      slot: '3 days ago, 11:30 AM',
-      description: 'Minor drip from the hot water mixer spindle knob.',
-      status: 'cancelled',
-      price: {
-        base: 18,
-        work: 15,
-        tax: 2,
-        total: 35,
-      },
-      provider: null,
-      createdAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
-    },
-  ]);
-
-  // Synchronize state changes of active booking to the master database
-  useEffect(() => {
-    if (activeBooking) {
-      setAllBookings(prev => {
-        const exists = prev.some(b => b.id === activeBooking.id);
-        if (exists) {
-          return prev.map(b => b.id === activeBooking.id ? activeBooking : b);
-        } else {
-          return [activeBooking, ...prev];
-        }
-      });
-    }
-  }, [activeBooking]);
-
-  // Core dynamic user identities
-  const [customerUser, setCustomerUser] = useState<AppUser | null>({
-    id: 'cust-1',
-    name: 'Ayesha Khan',
-    email: 'ayesha@gmail.com',
-    phone: '0300-1234567',
-    role: 'customer',
-    isLoggedIn: true
-  });
-
-  const [workerUser, setWorkerUser] = useState<AppUser | null>({
-    id: 'work-1',
-    name: 'Ahmed Kamal',
-    email: 'ahmed@gmail.com',
-    phone: '0300-7654321',
-    role: 'worker',
-    specialty: 'Electrician',
-    isLoggedIn: true
-  });
-
-  // Dynamic device role selectors
+  // Local device role selectors
   const [device1Role, setDevice1Role] = useState<'customer' | 'worker'>('customer');
   const [device2Role, setDevice2Role] = useState<'customer' | 'worker'>('worker');
 
-  // Client virtual database of accounts
-  const [usersDB, setUsersDB] = useState<any[]>([
-    { id: 'cust-1', name: 'Ayesha Khan', email: 'ayesha@gmail.com', phone: '0300-1234567', password: '123', role: 'customer' },
-    { id: 'work-1', name: 'Ahmed Kamal', email: 'ahmed@gmail.com', phone: '0300-7654321', password: '123', role: 'worker', specialty: 'Electrician' }
-  ]);
-
-  const handleCustomerLogin = (email: string, password: string, isSignUp: boolean, details?: { name: string; phone: string }) => {
-    const formattedEmail = email.trim().toLowerCase();
-    
-    if (isSignUp) {
-      const exists = usersDB.some(u => u.email === formattedEmail && u.role === 'customer');
-      if (exists) {
-        return { success: false, error: 'This email is already registered.' };
+  // Trigger state synchronization on mount & poll every 2 seconds
+  useEffect(() => {
+    const fetchFreshState = async () => {
+      try {
+        const res = await fetch('/api/state');
+        if (res.ok) {
+          const data = await res.json();
+          setActiveBooking(data.activeBooking);
+          setIsWorkerOnline(data.isWorkerOnline);
+          setJobInvites(data.jobInvites);
+          setChatMessages(data.chatMessages);
+          setAllBookings(data.allBookings);
+          setCustomerUser(data.customerUser);
+          setWorkerUser(data.workerUser);
+          setUsersDB(data.usersDB);
+          setLogs(data.logs);
+        }
+      } catch (err) {
+        console.error("Failed to sync backend state:", err);
       }
-      const newId = `cust-${Date.now()}`;
-      const newUser = {
-        id: newId,
-        name: details?.name || 'New Client',
-        email: formattedEmail,
-        phone: details?.phone || '0300-1111111',
+    };
+
+    fetchFreshState();
+    const interval = setInterval(fetchFreshState, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleCustomerLogin = async (email: string, password: string, isSignUp: boolean, details?: { name: string; phone: string }) => {
+    try {
+      const endpoint = isSignUp ? '/api/auth/register' : '/api/auth/login';
+      const body = isSignUp ? {
+        name: details?.name,
+        email,
+        phone: details?.phone,
+        password,
+        role: 'customer'
+      } : {
+        email,
         password,
         role: 'customer'
       };
-      setUsersDB(prev => [...prev, newUser]);
-      const loggedUser = { ...newUser, isLoggedIn: true };
-      setCustomerUser(loggedUser as AppUser);
-      addLog(`Customer registered: "${loggedUser.name}" (${loggedUser.email})`, 'customer');
-      return { success: true };
-    } else {
-      const matched = usersDB.find(u => u.email === formattedEmail && u.password === password && u.role === 'customer');
-      if (matched) {
-        const loggedUser = { ...matched, isLoggedIn: true };
-        setCustomerUser(loggedUser as AppUser);
-        addLog(`Customer logged in: "${loggedUser.name}"`, 'customer');
-        return { success: true };
-      } else {
-        return { success: false, error: 'Invalid customer credentials. Hint: Use pre-fill or "ayesha@gmail.com"/"123".' };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Authentication failed.' };
       }
+      setCustomerUser(data.user);
+      // Immediately refresh stats
+      const stateRes = await fetch('/api/state');
+      if (stateRes.ok) {
+        const stateData = await stateRes.json();
+        setLogs(stateData.logs);
+        setUsersDB(stateData.usersDB);
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error.' };
     }
   };
 
-  const handleCustomerLogout = () => {
-    const oldName = customerUser?.name || 'Customer';
-    setCustomerUser(null);
-    addLog(`Customer "${oldName}" signed out.`, 'customer');
+  const handleCustomerLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'customer' })
+      });
+      setCustomerUser(null);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleWorkerLogin = (email: string, password: string, isSignUp: boolean, details?: { name: string; phone: string; specialty?: string }) => {
-    const formattedEmail = email.trim().toLowerCase();
-
-    if (isSignUp) {
-      const exists = usersDB.some(u => u.email === formattedEmail && u.role === 'worker');
-      if (exists) {
-        return { success: false, error: 'This email is already registered.' };
-      }
-      const newId = `work-${Date.now()}`;
-      const newUser = {
-        id: newId,
-        name: details?.name || 'New Specialist',
-        email: formattedEmail,
-        phone: details?.phone || '0300-2222222',
+  const handleWorkerLogin = async (email: string, password: string, isSignUp: boolean, details?: { name: string; phone: string; specialty?: string }) => {
+    try {
+      const endpoint = isSignUp ? '/api/auth/register' : '/api/auth/login';
+      const body = isSignUp ? {
+        name: details?.name,
+        email,
+        phone: details?.phone,
         password,
         role: 'worker',
-        specialty: details?.specialty || 'Electrician'
+        specialty: details?.specialty
+      } : {
+        email,
+        password,
+        role: 'worker'
       };
-      setUsersDB(prev => [...prev, newUser]);
-      const loggedUser = { ...newUser, isLoggedIn: true };
-      setWorkerUser(loggedUser as AppUser);
-      addLog(`Specialist registered: "${loggedUser.name}" (${loggedUser.specialty})`, 'worker');
-      return { success: true };
-    } else {
-      const matched = usersDB.find(u => u.email === formattedEmail && u.password === password && u.role === 'worker');
-      if (matched) {
-        const loggedUser = { ...matched, isLoggedIn: true };
-        setWorkerUser(loggedUser as AppUser);
-        addLog(`Specialist logged in: "${loggedUser.name}"`, 'worker');
-        return { success: true };
-      } else {
-        return { success: false, error: 'Invalid credentials. Hint: Use pre-fill or "ahmed@gmail.com"/"123".' };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Authentication failed.' };
       }
+      setWorkerUser(data.user);
+      // Immediately refresh stats
+      const stateRes = await fetch('/api/state');
+      if (stateRes.ok) {
+        const stateData = await stateRes.json();
+        setLogs(stateData.logs);
+        setUsersDB(stateData.usersDB);
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error.' };
     }
   };
 
-  const handleWorkerLogout = () => {
-    const oldName = workerUser?.name || 'Worker';
-    setWorkerUser(null);
-    addLog(`Worker "${oldName}" signed out. Offline.`, 'worker');
-    setIsWorkerOnline(false);
-    setJobInvites([]);
-  };
-  
-  // Activity event log lines
-  const [logs, setLogs] = useState<ActionLog[]>([
-    {
-      id: '1',
-      time: new Date().toLocaleTimeString(),
-      message: 'Haazir Real-time System Client successfully booted on port 3000.',
-      type: 'system',
-    },
-    {
-      id: '2',
-      time: new Date().toLocaleTimeString(),
-      message: 'Worker Ahmed Kamal toggled availability status to ONLINE.',
-      type: 'worker',
-    },
-  ]);
-
-  const addLog = (message: string, type: 'customer' | 'worker' | 'system') => {
-    const uniqueId = `log-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-    setLogs((prev) => [
-      {
-        id: uniqueId,
-        time: new Date().toLocaleTimeString(),
-        message,
-        type,
-      },
-      ...prev,
-    ]);
+  const handleWorkerLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'worker' })
+      });
+      setWorkerUser(null);
+      setIsWorkerOnline(false);
+      setJobInvites([]);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  // TRIGGER: Customer raises a booking
-  const handleCreateBooking = (
+  const handleCreateBooking = async (
     categoryKey: string,
     issue: string,
     address: string,
     slot: string,
     comments: string
   ) => {
-    const orderId = `HZ-${Math.floor(100000 + Math.random() * 90000)}`;
-    const baseVal = categoryKey === 'cctv' ? 25 : categoryKey === 'electrician' ? 15 : categoryKey === 'plumber' ? 18 : 20;
-    const workVal = Math.floor(Math.random() * 15) + 15;
-    const taxVal = Math.round((baseVal + workVal) * 0.05);
-    const totalVal = baseVal + workVal + taxVal;
-
-    const newBooking: BookingState = {
-      id: orderId,
-      service: categoryKey.toUpperCase(),
-      serviceKey: categoryKey,
-      subService: issue || 'General Maintenance Diagnosis',
-      address,
-      slot,
-      description: comments || 'No comments specified',
-      status: 'pending',
-      price: {
-        base: baseVal,
-        work: workVal,
-        tax: taxVal,
-        total: totalVal,
-      },
-      provider: null,
-      createdAt: new Date().toISOString(),
-    };
-
-    setActiveBooking(newBooking);
-    addLog(`Customer raised new labor request ${orderId} for "${newBooking.subService}"`, 'customer');
-
-    // Automatically trigger invitation alert row on the Worker flow if worker is online
-    if (isWorkerOnline) {
-      const inviteJob: JobInvite = {
-        id: orderId,
-        service: newBooking.service,
-        subService: newBooking.subService,
-        address: newBooking.address,
-        slot: newBooking.slot,
-        description: newBooking.description,
-        price: newBooking.price,
-        customerName: customerUser?.name || 'Ayesha Khan',
-        customerPhone: customerUser?.phone || '+92 321 9876543',
-        distance: '1.2 km',
-      };
-      setJobInvites([inviteJob]);
-      addLog(`Pub/Sub server broadcasted Job offer ${orderId} to nearby technicians`, 'system');
-    }
-  };
-
-  // TRIGGER: Customer cancels a pending booking
-  const handleCancelBooking = () => {
-    if (activeBooking) {
-      addLog(`Customer withdrew and cancelled service ticket ${activeBooking.id}`, 'customer');
-      setAllBookings(prev => prev.map(b => b.id === activeBooking.id ? { ...b, status: 'cancelled' as const } : b));
-      setActiveBooking(null);
-      setJobInvites([]);
-      setChatMessages([]);
-    }
-  };
-
-  // TRIGGER: Worker toggles online status
-  const handleToggleWorkerOnline = () => {
-    const nextState = !isWorkerOnline;
-    setIsWorkerOnline(nextState);
-    const wName = workerUser?.name || 'Worker Ahmed';
-    addLog(`${wName} marked status to: ${nextState ? 'ONLINE' : 'OFFLINE'}`, 'worker');
-    
-    if (!nextState) {
-      setJobInvites([]); // offline clears offers
-    } else if (activeBooking && activeBooking.status === 'pending') {
-      // populate back if online
-      const inviteJob: JobInvite = {
-        id: activeBooking.id,
-        service: activeBooking.service,
-        subService: activeBooking.subService,
-        address: activeBooking.address,
-        slot: activeBooking.slot,
-        description: activeBooking.description,
-        price: activeBooking.price,
-        customerName: customerUser?.name || 'Ayesha Khan',
-        customerPhone: customerUser?.phone || '+92 321 9876543',
-        distance: '1.2 km',
-      };
-      setJobInvites([inviteJob]);
-      addLog(`Re-dispatched active pending ticket ${activeBooking.id} to newly online Worker`, 'system');
-    }
-  };
-
-  // TRIGGER: Worker accepts Job invitation
-  const handleAcceptJob = (id: string) => {
-    if (!activeBooking || activeBooking.id !== id) return;
-
-    setActiveBooking((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        status: 'assigned',
-        provider: {
-          id: workerUser?.id || 'WKR-401',
-          name: workerUser?.name || 'Ahmed Kamal',
-          avatar: 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=150&q=80',
-          phone: workerUser?.phone || '+92 300 1234567',
-          rating: 4.88,
-          trips: 342,
-          specialty: (workerUser?.specialty || 'Electrician') + ' Specialist',
-        },
-      };
-    });
-
-    const wName = workerUser?.name || 'Ahmed Kamal';
-    setJobInvites([]); // accepted
-    setChatMessages([
-      {
-        id: 'welcome-1',
-        sender: 'worker',
-        text: `Assalam-o-Alaikum! My name is ${wName}. I have accepted your request. I am gathering my tools and will head to your location shortly.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    try {
+      const res = await fetch('/api/bookings/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryKey, issue, address, slot, comments })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActiveBooking(data.booking);
+        // Quick update
+        const stateRes = await fetch('/api/state');
+        if (stateRes.ok) {
+          const stateData = await stateRes.json();
+          setJobInvites(stateData.jobInvites);
+          setAllBookings(stateData.allBookings);
+          setLogs(stateData.logs);
+        }
       }
-    ]);
-    addLog(`Worker ${wName} ACCEPTED Job ${id}. Status advanced to ASSIGNED.`, 'worker');
-  };
-
-  // TRIGGER: Worker declines/skips job invite
-  const handleDeclineJob = (id: string) => {
-    const wName = workerUser?.name || 'Ahmed Kamal';
-    setJobInvites([]);
-    addLog(`Worker ${wName} DECLINED Job ticket ${id}. Sourcing alternate worker.`, 'worker');
-  };
-
-  // TRIGGER: Worker advances job status
-  const handleAdvanceJob = () => {
-    if (!activeBooking) return;
-    const wName = workerUser?.name || 'Ahmed Kamal';
-
-    if (activeBooking.status === 'assigned') {
-      setActiveBooking((prev) => {
-        if (!prev) return null;
-        return { ...prev, status: 'in_progress' };
-      });
-      addLog(`Worker ${wName} arrived on site (DHA Phase 5). Session status updated to IN_PROGRESS.`, 'worker');
-    } else if (activeBooking.status === 'in_progress') {
-      setActiveBooking((prev) => {
-        if (!prev) return null;
-        return { ...prev, status: 'completed' };
-      });
-      addLog(`Worker ${wName} resolved repair. Raised Completed ticket, bill invoice generated.`, 'worker');
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  // TRIGGER: Customer submits feedback rating
-  const handleSubmitRating = (stars: number, text: string) => {
-    if (activeBooking) {
-      addLog(`Customer rated the visit (${stars} Stars). Comments: "${text || 'Perfect service'}"`, 'customer');
-      addLog(`Transaction ${activeBooking.id} successfully completed and archived.`, 'system');
-      setActiveBooking(null);
-      setChatMessages([]);
+  const handleCancelBooking = async () => {
+    try {
+      const res = await fetch('/api/bookings/cancel', { method: 'POST' });
+      if (res.ok) {
+        setActiveBooking(null);
+        setJobInvites([]);
+        setChatMessages([]);
+        const stateRes = await fetch('/api/state');
+        if (stateRes.ok) {
+          const stateData = await stateRes.json();
+          setAllBookings(stateData.allBookings);
+          setLogs(stateData.logs);
+        }
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  const handleSendMessage = (sender: 'customer' | 'worker', text: string) => {
-    const newMessage: ChatMessage = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-      sender,
-      text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    setChatMessages(prev => [...prev, newMessage]);
-    
-    const senderName = sender === 'customer' 
-      ? (customerUser?.name || 'Customer Ayesha Khan') 
-      : (workerUser?.name || 'Specialist Ahmed');
-    addLog(`${senderName} sent message: "${text}"`, sender);
+  const handleToggleWorkerOnline = async () => {
+    try {
+      const nextState = !isWorkerOnline;
+      const res = await fetch('/api/worker/toggle-online', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isOnline: nextState })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIsWorkerOnline(data.isWorkerOnline);
+        setJobInvites(data.jobInvites);
+        const stateRes = await fetch('/api/state');
+        if (stateRes.ok) {
+          const stateData = await stateRes.json();
+          setLogs(stateData.logs);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAcceptJob = async (id: string) => {
+    try {
+      const res = await fetch('/api/worker/accept-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActiveBooking(data.booking);
+        setChatMessages(data.chatMessages);
+        setJobInvites([]);
+        const stateRes = await fetch('/api/state');
+        if (stateRes.ok) {
+          const stateData = await stateRes.json();
+          setAllBookings(stateData.allBookings);
+          setLogs(stateData.logs);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeclineJob = async (id: string) => {
+    try {
+      const res = await fetch('/api/worker/decline-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      if (res.ok) {
+        setJobInvites([]);
+        const stateRes = await fetch('/api/state');
+        if (stateRes.ok) {
+          const stateData = await stateRes.json();
+          setLogs(stateData.logs);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAdvanceJob = async () => {
+    try {
+      const res = await fetch('/api/worker/advance-job', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setActiveBooking(data.booking);
+        const stateRes = await fetch('/api/state');
+        if (stateRes.ok) {
+          const stateData = await stateRes.json();
+          setAllBookings(stateData.allBookings);
+          setLogs(stateData.logs);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSubmitRating = async (stars: number, text: string) => {
+    try {
+      const res = await fetch('/api/bookings/rate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stars, feedback: text })
+      });
+      if (res.ok) {
+        setActiveBooking(null);
+        setChatMessages([]);
+        setJobInvites([]);
+        const stateRes = await fetch('/api/state');
+        if (stateRes.ok) {
+          const stateData = await stateRes.json();
+          setAllBookings(stateData.allBookings);
+          setLogs(stateData.logs);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSendMessage = async (sender: 'customer' | 'worker', text: string) => {
+    try {
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sender, text })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setChatMessages(data.chatMessages);
+        const stateRes = await fetch('/api/state');
+        if (stateRes.ok) {
+          const stateData = await stateRes.json();
+          setLogs(stateData.logs);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const currentTabStyles = (tab: 'simulator' | 'code') => {

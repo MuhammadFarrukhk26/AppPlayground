@@ -64,7 +64,7 @@ interface PhoneSimulatorProps {
   jobInvites: JobInvite[];
   chatMessages: ChatMessage[];
   currentUser: AppUser | null;
-  onLogin: (email: string, password: string, isSignUp: boolean, details?: { name: string; phone: string; specialty?: string }) => { success: boolean; error?: string };
+  onLogin: (email: string, password: string, isSignUp: boolean, details?: { name: string; phone: string; specialty?: string }) => Promise<{ success: boolean; error?: string }> | any;
   onLogout: () => void;
   onChangeRole?: (newRole: 'customer' | 'worker') => void;
   onSendMessage: (sender: 'customer' | 'worker', text: string) => void;
@@ -1091,7 +1091,7 @@ export default function PhoneSimulator({
 
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!authEmail || !authPassword) {
                         setAuthError('Please fill out all email and password fields.');
                         return;
@@ -1100,19 +1100,24 @@ export default function PhoneSimulator({
                         setAuthError('Please provide both full name and cell number.');
                         return;
                       }
-                      const res = onLogin(authEmail, authPassword, isSignUp, {
-                        name: authName,
-                        phone: authPhone,
-                        specialty: authSpecialty
-                      });
-                      if (!res.success) {
-                        setAuthError(res.error || 'Authentication error.');
-                      } else {
-                        setAuthError('');
-                        setAuthEmail('');
-                        setAuthPassword('');
-                        setAuthName('');
-                        setAuthPhone('');
+                      setAuthError('');
+                      try {
+                        const res = await onLogin(authEmail, authPassword, isSignUp, {
+                          name: authName,
+                          phone: authPhone,
+                          specialty: authSpecialty
+                        });
+                        if (res && !res.success) {
+                          setAuthError(res.error || 'Authentication error.');
+                        } else {
+                          setAuthError('');
+                          setAuthEmail('');
+                          setAuthPassword('');
+                          setAuthName('');
+                          setAuthPhone('');
+                        }
+                      } catch (err: any) {
+                        setAuthError(err.message || 'Authentication error.');
                       }
                     }}
                     className={`w-full py-2.5 active:scale-95 text-white font-black rounded-xl text-2xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer mt-1 ${
@@ -1144,12 +1149,12 @@ export default function PhoneSimulator({
                   {role === 'customer' ? (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         setAuthEmail('ayesha@gmail.com');
                         setAuthPassword('123');
                         setIsSignUp(false);
                         setAuthError('');
-                        onLogin('ayesha@gmail.com', '123', false);
+                        await onLogin('ayesha@gmail.com', '123', false);
                       }}
                       className="w-full bg-white hover:bg-teal-100/30 border border-teal-150 text-teal-600 font-extrabold py-2 px-3 rounded-lg text-3xs flex items-center justify-between transition-all cursor-pointer shadow-3xs"
                     >
@@ -1159,12 +1164,12 @@ export default function PhoneSimulator({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         setAuthEmail('ahmed@gmail.com');
                         setAuthPassword('123');
                         setIsSignUp(false);
                         setAuthError('');
-                        onLogin('ahmed@gmail.com', '123', false);
+                        await onLogin('ahmed@gmail.com', '123', false);
                       }}
                       className="w-full bg-white hover:bg-amber-100/30 border border-amber-150 text-amber-700 font-extrabold py-2 px-3 rounded-lg text-3xs flex items-center justify-between transition-all cursor-pointer shadow-3xs"
                     >
