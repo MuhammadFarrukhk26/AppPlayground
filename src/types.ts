@@ -54,6 +54,7 @@ export interface ChatMessage {
   sender: 'customer' | 'worker';
   text: string;
   timestamp: string;
+  bookingId?: string;
 }
 
 export interface AppUser {

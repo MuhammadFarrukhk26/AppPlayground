@@ -23,6 +23,7 @@ import {
   Sliders, 
   ThumbsUp,
   Check,
+  CheckCheck,
   Receipt,
   RotateCcw,
   Lock,
@@ -37,11 +38,17 @@ import {
   XCircle,
   Sun,
   Moon,
-  Bell
+  Bell,
+  Download,
+  HelpCircle
 } from 'lucide-react';
 import { BookingState, JobInvite, ActionLog, ChatMessage, AppUser } from '../types';
 import { InProgressRouteMap } from './InProgressRouteMap';
 import { LiveLocationMap } from './LiveLocationMap';
+import { Analytics } from './Analytics';
+import { WorkerProfile } from './WorkerProfile';
+import { ReceiptModal } from './ReceiptModal';
+import { HelpSupportModal } from './HelpSupportModal';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -67,14 +74,14 @@ interface PhoneSimulatorProps {
   onLogin: (email: string, password: string, isSignUp: boolean, details?: { name: string; phone: string; specialty?: string }) => Promise<{ success: boolean; error?: string }> | any;
   onLogout: () => void;
   onChangeRole?: (newRole: 'customer' | 'worker') => void;
-  onSendMessage: (sender: 'customer' | 'worker', text: string) => void;
+  onSendMessage: (sender: 'customer' | 'worker', text: string, bookingId?: string) => void;
   onCreateBooking: (categoryKey: string, issue: string, address: string, slot: string, comments: string) => void;
   onCancelBooking: () => void;
   onToggleWorkerOnline: () => void;
   onAcceptJob: (id: string) => void;
   onDeclineJob: (id: string) => void;
-  onAdvanceJob: () => void;
-  onSubmitRating: (stars: number, text: string) => void;
+  onAdvanceJob: (id?: string) => void;
+  onSubmitRating: (stars: number, text: string, id?: string) => void;
 }
 
 /* ========================================================================= */
@@ -482,6 +489,78 @@ export default function PhoneSimulator({
     return days;
   };
 
+  const getBookingScheduledTime = (slotStr: string, createdAtStr?: string): Date | null => {
+    const now = new Date();
+    let targetDate = new Date(); // default to today
+    
+    // Let's check for day labels
+    const calendarDays = getCalendarDays();
+    let foundDay = false;
+    for (const day of calendarDays) {
+      if (slotStr.includes(day.dayLabel)) {
+        targetDate.setDate(now.getDate() + day.index);
+        foundDay = true;
+        break;
+      }
+    }
+    
+    if (!foundDay) {
+      if (slotStr.toLowerCase().includes('today')) {
+        targetDate = new Date();
+      } else if (slotStr.toLowerCase().includes('tomorrow')) {
+        targetDate = new Date();
+        targetDate.setDate(now.getDate() + 1);
+      } else if (slotStr.toLowerCase().includes('yesterday')) {
+        targetDate = new Date();
+        targetDate.setDate(now.getDate() - 1);
+      } else if (createdAtStr) {
+        targetDate = new Date(createdAtStr);
+      }
+    }
+
+    // Look for the first time match (representing scheduled starting window)
+    const timeRegex = /(\d{1,2}):(\d{2})\s*(AM|PM)/i;
+    const match = slotStr.match(timeRegex);
+    if (match) {
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = match[3].toUpperCase();
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      targetDate.setHours(hours, minutes, 0, 0);
+      return targetDate;
+    } else if (slotStr.toLowerCase().includes('urgent') || slotStr.toLowerCase().includes('as soon as possible')) {
+      if (createdAtStr) {
+        return new Date(createdAtStr);
+      }
+      return now;
+    }
+    return null;
+  };
+
+  const isBookingWithin30Min = (booking: BookingState): boolean => {
+    if (booking.status === 'completed' || booking.status === 'cancelled') {
+      return false;
+    }
+    const schedTime = getBookingScheduledTime(booking.slot, booking.createdAt);
+    if (!schedTime) return false;
+    
+    const now = new Date();
+    const diffMs = schedTime.getTime() - now.getTime();
+    const diffMins = diffMs / (1000 * 60); // minutes until scheduled job
+    
+    if (booking.slot.toLowerCase().includes('urgent') || booking.slot.toLowerCase().includes('as soon as possible')) {
+      if (booking.createdAt) {
+        const createdTime = new Date(booking.createdAt);
+        const ageMins = (now.getTime() - createdTime.getTime()) / (1000 * 60);
+        return ageMins >= 0 && ageMins <= 30;
+      }
+      return true;
+    }
+    
+    return diffMins >= -120 && diffMins <= 30;
+  };
+
   // Auth Form states
   const [isSignUp, setIsSignUp] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
@@ -494,7 +573,11 @@ export default function PhoneSimulator({
   // Navigation states for Customer
   const [customerScreen, setCustomerScreen] = useState<'home' | 'booking' | 'tracking' | 'payment' | 'completed' | 'bookings'>('home');
   const [selectedMapView, setSelectedMapView] = useState<'telemetry' | 'livelocation'>('telemetry');
-  const [workerTab, setWorkerTab] = useState<'jobs' | 'insights'>('jobs');
+  const [workerTab, setWorkerTab] = useState<'jobs' | 'insights' | 'analytics'>('jobs');
+  const [showWorkerProfile, setShowWorkerProfile] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [selectedReceiptBooking, setSelectedReceiptBooking] = useState<BookingState | null>(null);
   const [bookingFilter, setBookingFilter] = useState<'Active' | 'Completed' | 'Cancelled'>('Active');
   const [selectedCatKey, setSelectedCatKey] = useState<string>('electrician');
   const [selectedIssue, setSelectedIssue] = useState<string>('');
@@ -562,16 +645,57 @@ export default function PhoneSimulator({
 
   // Credit Card Payment Mockup States
   const [isPaid, setIsPaid] = useState<boolean>(false);
-  const [paymentCardNumber, setPaymentCardNumber] = useState<string>('');
-  const [paymentCardName, setPaymentCardName] = useState<string>('');
-  const [paymentCardExpiry, setPaymentCardExpiry] = useState<string>('');
-  const [paymentCardCVV, setPaymentCardCVV] = useState<string>('');
+  const [paymentCardNumber, setPaymentCardNumber] = useState<string>('4242 4242 4242 4242');
+  const [paymentCardName, setPaymentCardName] = useState<string>('AYESHA KHAN');
+  const [paymentCardExpiry, setPaymentCardExpiry] = useState<string>('12/29');
+  const [paymentCardCVV, setPaymentCardCVV] = useState<string>('543');
   const [paymentStatusState, setPaymentStatusState] = useState<'form' | 'processing' | 'success'>('form');
   const [cardFocusedField, setCardFocusedField] = useState<string>('');
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string>('visa_xxxx');
+  const [walletPhone, setWalletPhone] = useState<string>('0300-1122334');
+  const [walletOTP, setWalletOTP] = useState<string>('');
+  const [walletOTPSent, setWalletOTPSent] = useState<boolean>(false);
 
   // Chat interface visibility
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [chatInputText, setChatInputText] = useState<string>('');
+
+  // Track focused worker booking in dynamic simultaneous queue
+  const [focusedWorkerBookingId, setFocusedWorkerBookingId] = useState<string | null>(null);
+
+  // Compute the worker's assigned queue of active/assigned bookings
+  const workerQueue = React.useMemo(() => {
+    return allBookings.filter(b => 
+      b.provider?.id === (currentUser?.id || 'work-1') && 
+      (b.status === 'assigned' || b.status === 'in_progress')
+    );
+  }, [allBookings, currentUser]);
+
+  // Determine which booking is currently selected/focused in the worker tab
+  const focusedWorkerBooking = React.useMemo(() => {
+    if (workerQueue.length === 0) return null;
+    const found = workerQueue.find(b => b.id === focusedWorkerBookingId);
+    return found || workerQueue[0];
+  }, [workerQueue, focusedWorkerBookingId]);
+
+  // Filter chat messages so they are kept separate and isolated per active booking ID
+  const filteredChatMessages = React.useMemo(() => {
+    if (role === 'customer') {
+      if (!activeBooking) return chatMessages;
+      return chatMessages.filter(msg => !msg.bookingId || msg.bookingId === activeBooking.id);
+    } else {
+      if (!focusedWorkerBooking) return chatMessages;
+      return chatMessages.filter(msg => !msg.bookingId || msg.bookingId === focusedWorkerBooking.id);
+    }
+  }, [chatMessages, role, activeBooking, focusedWorkerBooking]);
+
+  // Schedule Reminder State and Cache
+  const notifiedScheduleRemindersRef = React.useRef<Record<string, boolean>>({});
+
+  const reminderBookings = React.useMemo(() => {
+    if (role !== 'customer') return [];
+    return allBookings.filter(b => isBookingWithin30Min(b));
+  }, [allBookings, role]);
 
   // Simulated push notification states
   const [toast, setToast] = useState<{ id: number; title: string; message: string; type: string } | null>(null);
@@ -784,6 +908,22 @@ export default function PhoneSimulator({
       return () => clearTimeout(timer);
     }
   }, [showBookingSuccessAnimation]);
+
+  // Trigger live toast notifications when an active booking is within 30 minutes
+  React.useEffect(() => {
+    if (role === 'customer' && reminderBookings.length > 0) {
+      reminderBookings.forEach((b) => {
+        if (!notifiedScheduleRemindersRef.current[b.id]) {
+          triggerToast(
+            '⏰ Booking Reminder', 
+            `Your booked ${b.service} special job (${b.subService}) starts within 30 minutes!`, 
+            'info'
+          );
+          notifiedScheduleRemindersRef.current[b.id] = true;
+        }
+      });
+    }
+  }, [reminderBookings, role]);
 
   return (
     <div className="flex flex-col items-center">
@@ -1179,151 +1319,163 @@ export default function PhoneSimulator({
                   )}
                 </div>
               </div>
-            ) : isChatOpen && activeBooking ? (
-              /* ========================================================= */
-              /* LIVE SECURED TEXT-CHAT INTERFACE                          */
-              /* ========================================================= */
-              <div className="flex-1 flex flex-col justify-between h-full bg-slate-50 text-left animate-fade-in relative min-h-[460px]">
-                {/* Chat Top Header */}
-                <div className="bg-white border-b border-slate-150 p-3.5 flex items-center justify-between sticky top-0 z-30 select-none shadow-3xs shrink-0">
-                  <button 
-                    onClick={() => setIsChatOpen(false)}
-                    className="flex items-center gap-1 text-slate-500 hover:text-slate-800 font-bold text-2xs cursor-pointer"
-                  >
-                    <ChevronRight size={14} className="rotate-180" />
-                    <span>Back</span>
-                  </button>
-                  <div className="text-center">
-                    <span className="font-extrabold text-slate-850 text-2xs block">
-                      {role === 'customer' 
-                        ? (activeBooking.provider?.name || 'Ahmed Kamal') 
-                        : 'Ayesha Khan'
-                      }
-                    </span>
-                    <span className="text-[9px] text-teal-605 text-teal-600 font-bold uppercase tracking-wider block">
-                      {role === 'customer' ? 'Haazir Specialist' : 'Customer Account'}
-                    </span>
-                  </div>
-                  <div className="w-6 h-6 rounded-full bg-teal-100 flex items-center justify-center font-bold text-[10px] text-teal-800 select-none">
-                    {role === 'customer' ? 'AK' : 'AK'}
-                  </div>
-                </div>
-
-                {/* Messages Body List */}
-                <div className="flex-grow overflow-y-auto no-scrollbar p-3.5 space-y-2.5 max-h-[300px]">
-                  {chatMessages.length === 0 ? (
-                    <div className="text-center py-12 text-slate-400 font-mono text-[9px] select-none">
-                      Secured communication stream. Tap replies or type to chat.
+            ) : isChatOpen && (role === 'customer' ? activeBooking : focusedWorkerBooking) ? (
+              (() => {
+              const chatBooking = role === 'customer' ? activeBooking! : focusedWorkerBooking!;
+              const dispatchLocalMessage = (sender: 'customer' | 'worker', text: string) => {
+                onSendMessage(sender, text, chatBooking.id);
+              };
+              return (
+                <div className="flex-1 flex flex-col justify-between h-full bg-slate-50 text-left animate-fade-in relative min-h-[460px]">
+                  {/* Chat Top Header */}
+                  <div className="bg-white border-b border-slate-150 p-3.5 flex items-center justify-between sticky top-0 z-30 select-none shadow-3xs shrink-0">
+                    <button 
+                      onClick={() => setIsChatOpen(false)}
+                      className="flex items-center gap-1 text-slate-500 hover:text-slate-800 font-bold text-2xs cursor-pointer"
+                    >
+                      <ChevronRight size={14} className="rotate-180" />
+                      <span>Back</span>
+                    </button>
+                    <div className="text-center">
+                      <span className="font-extrabold text-slate-850 text-2xs block">
+                        {role === 'customer' 
+                          ? (chatBooking.provider?.name || 'Ahmed Kamal') 
+                          : 'Ayesha Khan'
+                        }
+                      </span>
+                      <span className="text-[9px] text-teal-605 text-teal-600 font-bold uppercase tracking-wider block">
+                        {role === 'customer' ? 'Haazir Specialist' : 'Customer Account'}
+                      </span>
                     </div>
-                  ) : (
-                    chatMessages.map((msg) => {
-                      const isMe = msg.sender === role;
-                      return (
-                        <div 
-                          key={msg.id} 
-                          className={`flex flex-col max-w-[80%] ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`}
-                        >
-                          <div className={`p-2.5 rounded-2xl text-[11px] leading-normal shadow-3xs ${
-                            isMe 
-                              ? 'bg-teal-600 text-white rounded-br-2xs font-medium' 
-                              : 'bg-white border border-slate-200 text-slate-800 rounded-bl-2xs font-medium'
-                          }`}>
-                            {msg.text}
+                    <div className="w-6 h-6 rounded-full bg-teal-100 flex items-center justify-center font-bold text-[10px] text-teal-800 select-none">
+                      {role === 'customer' ? 'AK' : 'AK'}
+                    </div>
+                  </div>
+
+                  {/* Messages Body List */}
+                  <div className="flex-grow overflow-y-auto no-scrollbar p-3.5 space-y-2.5 max-h-[300px]">
+                    {filteredChatMessages.length === 0 ? (
+                      <div className="text-center py-12 text-slate-400 font-mono text-[9px] select-none">
+                        Secured communication stream. Tap replies or type to chat.
+                      </div>
+                    ) : (
+                      filteredChatMessages.map((msg) => {
+                        const isMe = msg.sender === role;
+                        return (
+                          <div 
+                            key={msg.id} 
+                            className={`flex flex-col max-w-[80%] ${isMe ? 'ml-auto' : 'mr-auto'}`}
+                          >
+                            <div className={`p-2.5 pb-1 rounded-2xl text-[11px] leading-normal shadow-3xs flex flex-col ${
+                              isMe 
+                                ? 'bg-teal-600 text-white rounded-br-2xs' 
+                                : 'bg-white border border-slate-200 text-slate-800 rounded-bl-2xs'
+                            }`}>
+                              <span className="font-medium break-words leading-normal block">{msg.text}</span>
+                              <div className="flex items-center gap-1 mt-1 justify-end select-none leading-none">
+                                <span className={`text-[7.5px] font-mono leading-none ${isMe ? 'text-teal-200/90 font-semibold' : 'text-slate-400 font-semibold'}`}>
+                                  {msg.timestamp}
+                                </span>
+                                {isMe && (
+                                  <CheckCheck size={11} className="text-teal-200 flex-shrink-0 stroke-2 font-black leading-none" />
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <span className="text-[8px] text-slate-400 font-mono mt-0.5 px-1">{msg.timestamp}</span>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+                        );
+                      })
+                    )}
+                  </div>
 
-                {/* Instant Quick Action recommendation list */}
-                <div className="p-2 border-t border-slate-100 bg-white shrink-0 scrollbar-none overflow-x-auto whitespace-nowrap flex gap-1.5 select-none shrink-0">
-                  {role === 'customer' ? (
-                    <>
-                      <button 
-                        onClick={() => {
-                          onSendMessage('customer', "Assalam-o-Alaikum Ahmed, when will you arrive?");
-                        }}
-                        className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
-                      >
-                        ⏱️ When will you arrive?
-                      </button>
-                      <button 
-                        onClick={() => {
-                          onSendMessage('customer', "I'm on the 3rd floor. Please ring the doorbell.");
-                        }}
-                        className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
-                      >
-                        🔔 Ring doorbell on 3rd floor
-                      </button>
-                      <button 
-                        onClick={() => {
-                          onSendMessage('customer', "No problem, please take your time.");
-                        }}
-                        className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
-                      >
-                        ⏱️ Take your time
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button 
-                        onClick={() => {
-                          onSendMessage('worker', "Assalam-o-Alaikum! Driving to your location now.");
-                        }}
-                        className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
-                      >
-                        🚗 Heading over now
-                      </button>
-                      <button 
-                        onClick={() => {
-                          onSendMessage('worker', "I am outside your gate. Can you guide me in?");
-                        }}
-                        className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
-                      >
-                        📍 Reached outside
-                      </button>
-                      <button 
-                        onClick={() => {
-                          onSendMessage('worker', "All fixed and tested. Let me know if any other issue!");
-                        }}
-                        className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
-                      >
-                        🔧 Resolved & Tested
-                      </button>
-                    </>
-                  )}
-                </div>
+                  {/* Instant Quick Action recommendation list */}
+                  <div className="p-2 border-t border-slate-100 bg-white shrink-0 scrollbar-none overflow-x-auto whitespace-nowrap flex gap-1.5 select-none shrink-0">
+                    {role === 'customer' ? (
+                      <>
+                        <button 
+                          onClick={() => {
+                            dispatchLocalMessage('customer', "Assalam-o-Alaikum Ahmed, when will you arrive?");
+                          }}
+                          className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
+                        >
+                          ⏱️ When will you arrive?
+                        </button>
+                        <button 
+                          onClick={() => {
+                            dispatchLocalMessage('customer', "I'm on the 3rd floor. Please ring the doorbell.");
+                          }}
+                          className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
+                        >
+                          🔔 Ring doorbell on 3rd floor
+                        </button>
+                        <button 
+                          onClick={() => {
+                            dispatchLocalMessage('customer', "No problem, please take your time.");
+                          }}
+                          className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
+                        >
+                          ⏱️ Take your time
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button 
+                          onClick={() => {
+                            dispatchLocalMessage('worker', "Assalam-o-Alaikum! Driving to your location now.");
+                          }}
+                          className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
+                        >
+                          🚗 Heading over now
+                        </button>
+                        <button 
+                          onClick={() => {
+                            dispatchLocalMessage('worker', "I am outside your gate. Can you guide me in?");
+                          }}
+                          className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
+                        >
+                          📍 Reached outside
+                        </button>
+                        <button 
+                          onClick={() => {
+                            dispatchLocalMessage('worker', "All fixed and tested. Let me know if any other issue!");
+                          }}
+                          className="bg-slate-50 hover:bg-teal-50 hover:border-teal-300 border border-slate-200 text-slate-600 hover:text-teal-700 text-3xs font-extrabold px-2.5 py-1.5 rounded-full cursor-pointer transition-all shrink-0"
+                        >
+                          🔧 Resolved & Tested
+                        </button>
+                      </>
+                    )}
+                  </div>
 
-                {/* TextInput input bar */}
-                <div className="p-3 bg-slate-150 border-t border-slate-200 flex items-center gap-2 shrink-0">
-                  <input
-                    type="text"
-                    value={chatInputText}
-                    onChange={(e) => setChatInputText(e.target.value)}
-                    placeholder="Type message here..."
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && chatInputText.trim()) {
-                        onSendMessage(role, chatInputText.trim());
-                        setChatInputText('');
-                      }
-                    }}
-                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-2xs focus:ring-1 focus:ring-teal-600 focus:outline-none placeholder-slate-400 font-semibold text-slate-705"
-                  />
-                  <button
-                    onClick={() => {
-                      if (chatInputText.trim()) {
-                        onSendMessage(role, chatInputText.trim());
-                        setChatInputText('');
-                      }
-                    }}
-                    className="p-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-                  >
-                    <Send size={11} />
-                  </button>
+                  {/* TextInput input bar */}
+                  <div className="p-3 bg-slate-150 border-t border-slate-200 flex items-center gap-2 shrink-0">
+                    <input
+                      type="text"
+                      value={chatInputText}
+                      onChange={(e) => setChatInputText(e.target.value)}
+                      placeholder="Type message here..."
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && chatInputText.trim()) {
+                          dispatchLocalMessage(role, chatInputText.trim());
+                          setChatInputText('');
+                        }
+                      }}
+                      className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-2xs focus:ring-1 focus:ring-teal-600 focus:outline-none placeholder-slate-400 font-semibold text-slate-705"
+                    />
+                    <button
+                      onClick={() => {
+                        if (chatInputText.trim()) {
+                          dispatchLocalMessage(role, chatInputText.trim());
+                          setChatInputText('');
+                        }
+                      }}
+                      className="p-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                    >
+                      <Send size={11} />
+                    </button>
+                  </div>
                 </div>
-              </div>
+              );
+            })()
             ) : role === 'customer' ? (
               /* ========================================================= */
               /* CLIENT MAIN VIEWFLOW STATE                                */
@@ -1342,6 +1494,21 @@ export default function PhoneSimulator({
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
+                        {/* Help & Support Portal Button */}
+                        <button
+                          type="button"
+                          onClick={() => setShowHelpModal(true)}
+                          style={{ contentVisibility: 'auto' }}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                            isDarkMode 
+                              ? 'bg-slate-900 border border-slate-800 text-teal-400 hover:bg-slate-800' 
+                              : 'bg-teal-50 border border-teal-100 text-teal-600 hover:bg-teal-100/70 shadow-3xs'
+                          }`}
+                          title={language === 'en' ? 'Help & Support' : 'طلبِ مدد'}
+                        >
+                          <HelpCircle size={13} className="stroke-[2.5]" />
+                        </button>
+
                         <div className="text-right">
                           <span className={`text-[10px] font-extrabold block leading-tight truncate max-w-[80px] ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                             {currentUser?.name || 'Ayesha Khan'}
@@ -1390,6 +1557,72 @@ export default function PhoneSimulator({
                         )}
                       </div>
                     </div>
+
+                    {/* Schedule Reminders Live Alert List */}
+                    {reminderBookings.map((b) => {
+                      const schedTime = getBookingScheduledTime(b.slot, b.createdAt);
+                      let relativeText = '';
+                      if (schedTime) {
+                        const diffMins = Math.round((schedTime.getTime() - Date.now()) / (1000 * 60));
+                        if (b.slot.toLowerCase().includes('urgent')) {
+                          relativeText = language === 'en' ? 'ASAP' : 'ابھی ضرورت ہے';
+                        } else if (diffMins > 0) {
+                          relativeText = language === 'en' ? `starts in ${diffMins} min` : `${diffMins} منٹ میں`;
+                        } else if (diffMins < 0 && diffMins > -120) {
+                          relativeText = language === 'en' ? `started ${Math.abs(diffMins)} min ago` : `${Math.abs(diffMins)} منٹ پہلے`;
+                        } else {
+                          relativeText = language === 'en' ? 'starts now' : 'ابھی شروع';
+                        }
+                      } else if (b.slot.toLowerCase().includes('urgent')) {
+                        relativeText = language === 'en' ? 'ASAP' : 'ابھی ضرورت ہے';
+                      }
+
+                      return (
+                        <div 
+                          key={b.id} 
+                          className={`mb-3.5 border rounded-2xl p-3 flex gap-2.5 items-start justify-between shadow-3xs hover:scale-[1.01] active:scale-99 cursor-pointer transition-all select-none ${
+                            isDarkMode 
+                              ? 'bg-amber-500/10 border-amber-500/25 text-amber-200' 
+                              : 'bg-amber-50/80 border-amber-250 text-amber-900'
+                          }`}
+                          onClick={() => {
+                            if (activeBooking?.id === b.id) {
+                              setCustomerScreen(activeBooking.status === 'completed' ? 'completed' : 'tracking');
+                            } else {
+                              setCustomerScreen('bookings');
+                            }
+                          }}
+                        >
+                          <div className="shrink-0 w-7 h-7 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-600 animate-pulse">
+                            <Bell size={12} className="stroke-[2.5]" />
+                          </div>
+                          <div className="text-left flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[7.5px] font-extrabold uppercase tracking-wider text-amber-650 bg-amber-500/10 px-1.5 py-0.5 rounded-md leading-none">
+                                {language === 'en' ? 'UPCOMING REMINDER' : 'آنے والا کام'}
+                              </span>
+                              {relativeText && (
+                                <span className="text-[7.5px] font-bold font-mono tracking-wider opacity-85 leading-none">
+                                  • {relativeText}
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="text-[9.5px] font-extrabold mt-1 truncate leading-tight">
+                              {b.service} - {b.subService}
+                            </h4>
+                            <p className={`text-[8.5px] mt-0.5 leading-snug line-clamp-1 ${isDarkMode ? 'text-slate-405' : 'text-slate-655'}`}>
+                              {language === 'en' ? 'Scheduled slot' : 'مقررہ وقت'}: {b.slot}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="shrink-0 text-[8px] font-black tracking-wide uppercase px-2 py-1 bg-amber-500 text-white rounded-lg hover:bg-amber-600 shadow-3xs leading-none mt-1 cursor-pointer"
+                          >
+                            {language === 'en' ? 'View' : 'دیکھیں'}
+                          </button>
+                        </div>
+                      );
+                    })}
 
                     {/* Quick Active Booking Floating Alert */}
                     {activeBooking && (
@@ -2057,169 +2290,341 @@ export default function PhoneSimulator({
                             </div>
                           </div>
 
-                          {/* Digital Credit Card Mockup */}
-                          <div className="relative h-36 w-full rounded-2xl bg-gradient-to-tr from-slate-900 via-teal-950 to-emerald-950 p-4 text-white overflow-hidden shadow-md select-none transition-all">
-                            {/* Decorative Glow */}
-                            <div className="absolute right-0 top-0 w-24 h-24 bg-teal-500 rounded-full blur-2xl opacity-20 pointer-events-none" />
-                            <div className="absolute left-12 bottom-0 w-16 h-16 bg-emerald-500 rounded-full blur-2xl opacity-15 pointer-events-none" />
+                          {/* Stored Payment Methods selection */}
+                          <div className="space-y-1.5">
+                            <span className="text-[8.5px] text-slate-400 font-extrabold uppercase tracking-wider block">
+                              Select Saved / Stored Payment Method
+                            </span>
+                            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar select-none">
+                              {[
+                                { id: 'visa_xxxx', label: 'Visa **4242', info: 'Personal Card', type: 'card', logo: '💳' },
+                                { id: 'master_9081', label: 'Master **9081', info: 'Business Card', type: 'card', logo: '💳' },
+                                { id: 'easypaisa', label: 'EasyPaisa', info: 'Smart Wallet', type: 'wallet', logo: '🟢' },
+                                { id: 'jazzcash', label: 'JazzCash', info: 'Mobile Wallet', type: 'wallet', logo: '🔴' },
+                                { id: 'custom_card', label: 'Add New Card', info: 'Debit/Credit', type: 'custom', logo: '➕' }
+                              ].map((item) => {
+                                const selected = selectedPaymentMethodId === item.id;
+                                return (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedPaymentMethodId(item.id);
+                                      setWalletOTPSent(false);
+                                      setWalletOTP('');
+                                      if (item.id === 'visa_xxxx') {
+                                        setPaymentCardNumber('4242 4242 4242 4242');
+                                        setPaymentCardName('AYESHA KHAN');
+                                        setPaymentCardExpiry('12/29');
+                                        setPaymentCardCVV('543');
+                                      } else if (item.id === 'master_9081') {
+                                        setPaymentCardNumber('5105 1029 9081 4455');
+                                        setPaymentCardName('AYESHA KHAN');
+                                        setPaymentCardExpiry('08/30');
+                                        setPaymentCardCVV('128');
+                                      } else if (item.id === 'custom_card') {
+                                        setPaymentCardNumber('');
+                                        setPaymentCardName('');
+                                        setPaymentCardExpiry('');
+                                        setPaymentCardCVV('');
+                                      }
+                                    }}
+                                    className={`shrink-0 flex flex-col items-start p-2 rounded-xl border text-left transition-all cursor-pointer min-w-[85px] outline-none ${
+                                      selected 
+                                        ? 'border-teal-600 bg-teal-500/10 shadow-xs ring-1 ring-teal-500' 
+                                        : (isDarkMode ? 'border-slate-800 bg-slate-900/60 hover:bg-slate-900' : 'border-slate-200 bg-white hover:bg-slate-50')
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] shrink-0 leading-none">{item.logo}</span>
+                                      <span className="font-extrabold text-[8px] tracking-tight">{item.label}</span>
+                                    </div>
+                                    <span className="text-[6.5px] text-slate-400 mt-0.5 leading-none block font-semibold">{item.info}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
 
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <span className="text-[7px] text-teal-400 uppercase tracking-widest font-black block leading-none">HAazir Premium Pay</span>
-                                <div className="w-7 h-5 bg-gradient-to-br from-amber-300 to-amber-500 rounded-sm mt-2 opacity-85 shadow-sm border border-amber-400/20 flex items-center justify-center">
-                                  {/* Chip lines */}
-                                  <div className="grid grid-cols-2 gap-0.5 w-4 h-3.5">
-                                    <div className="border border-amber-600/30 rounded-2xs" />
-                                    <div className="border border-amber-600/30 rounded-2xs" />
-                                    <div className="border border-amber-600/30 rounded-2xs" />
-                                    <div className="border border-amber-600/30 rounded-2xs" />
+                          {/* Conditional View: Wallet versus Card */}
+                          {(selectedPaymentMethodId === 'easypaisa' || selectedPaymentMethodId === 'jazzcash') ? (
+                            <div className="space-y-4 animate-fade-in select-none">
+                              {/* Wallet Brand Mockup */}
+                              <div className={`p-4 rounded-2xl text-white relative overflow-hidden shadow-xs border ${
+                                selectedPaymentMethodId === 'easypaisa' 
+                                  ? 'bg-gradient-to-br from-emerald-550 via-emerald-600 to-teal-800 border-emerald-400/10' 
+                                  : 'bg-gradient-to-br from-red-650 via-amber-850 to-slate-900 border-red-500/10'
+                              }`}>
+                                <div className="absolute right-0 top-0 w-24 h-24 bg-white/5 rounded-full blur-xl pointer-events-none" />
+                                
+                                <div className="flex justify-between items-center mb-4">
+                                  <div>
+                                    <span className="text-[11px] font-black tracking-wide block uppercase leading-none">
+                                      {selectedPaymentMethodId === 'easypaisa' ? '🟢 EasyPaisa Pay' : '🔴 JazzCash Wallet'}
+                                    </span>
+                                    <span className="text-[6.5px] text-white/75 uppercase tracking-widest mt-1 block font-bold leading-none">Instant Voucher billing</span>
+                                  </div>
+                                  <div className="bg-white/10 px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider">
+                                    Saved Account
+                                  </div>
+                                </div>
+
+                                <div className="flex justify-between items-end mt-4">
+                                  <div>
+                                    <span className="text-[6px] text-white/60 uppercase tracking-wider block font-bold leading-none">Registered Mobile Number</span>
+                                    <span className="text-[11px] font-bold mt-1 block leading-none font-mono">
+                                      {walletPhone}
+                                    </span>
+                                  </div>
+                                  <span className="text-[9px] font-black uppercase tracking-tight text-white font-mono bg-black/15 px-2 py-1 rounded">
+                                    HA-VOUCHER
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Mobile input Form logic */}
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1 block">Account Mobile/Msisdn</label>
+                                  <input 
+                                    type="text"
+                                    value={walletPhone}
+                                    onChange={(e) => setWalletPhone(e.target.value)}
+                                    placeholder="0300-1234567"
+                                    className={`w-full border rounded-xl px-3 py-2 text-2xs font-mono font-bold transition-all focus:outline-none focus:ring-1 focus:ring-teal-500 ${
+                                      isDarkMode 
+                                        ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-755' 
+                                        : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450 shadow-2xs'
+                                    }`}
+                                  />
+                                </div>
+
+                                {walletOTPSent ? (
+                                  <div className="space-y-2 animate-slide-up">
+                                    <div className="flex items-center justify-between">
+                                      <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 block">Enter SMS/Push OTP Code</label>
+                                      <span className="text-[7.5px] text-emerald-600 font-bold uppercase tracking-wider animate-pulse">Code sent via simulated SMS</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <input 
+                                        type="text"
+                                        maxLength={4}
+                                        value={walletOTP}
+                                        onChange={(e) => setWalletOTP(e.target.value.replace(/[^0-9]/g, ''))}
+                                        placeholder="••••"
+                                        className="w-20 border rounded-xl px-3 py-2 text-center text-xs font-mono font-black tracking-widest text-teal-600 border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500 bg-teal-500/5"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const mockCode = '9201';
+                                          setWalletOTP(mockCode);
+                                          triggerToast('Haazir Pay security', `Pre-filled verification code ${mockCode} for testing context`, 'info');
+                                        }}
+                                        className="text-[7.5px] font-extrabold uppercase bg-teal-50 border border-teal-150 dark:bg-slate-905 text-teal-650 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-teal-100/50"
+                                      >
+                                        ⚡ Auto-fill OTP
+                                      </button>
+                                    </div>
+                                    <span className="text-[7px] text-slate-450 block leading-tight">
+                                      We sent a simulated 4-digit code to {walletPhone}. Click the prefill button if you or check notifications.
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!walletPhone.trim() || walletPhone.length < 10) {
+                                        alert('Please provide a valid Pakistani 11-digit mobile number!');
+                                        return;
+                                      }
+                                      setWalletOTPSent(true);
+                                      const mockOtpVal = '9201';
+                                      // Trigger toast SMS simulated dispatch
+                                      setTimeout(() => {
+                                        triggerToast(
+                                          '💬 SMS-Simulated Alert: HAAZIR-PAY', 
+                                          `Your security OTP verification code for transaction PKR ${activeBooking.price.total * 100} is [ ${mockOtpVal} ]. Do not share.`, 
+                                          'chat'
+                                        );
+                                      }, 1000);
+                                    }}
+                                    className="w-full bg-slate-950 dark:bg-slate-900 border border-slate-800 text-white font-extrabold text-[8.5px] py-1.5 px-3 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                                  >
+                                    <span>📲 Request OTP verification code</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-4 animate-fade-in select-none">
+                              {/* Digital Credit Card Mockup */}
+                              <div className="relative h-36 w-full rounded-2xl bg-gradient-to-tr from-slate-900 via-teal-950 to-emerald-950 p-4 text-white overflow-hidden shadow-md select-none transition-all">
+                                {/* Decorative Glow */}
+                                <div className="absolute right-0 top-0 w-24 h-24 bg-teal-500 rounded-full blur-2xl opacity-20 pointer-events-none" />
+                                <div className="absolute left-12 bottom-0 w-16 h-16 bg-emerald-500 rounded-full blur-2xl opacity-15 pointer-events-none" />
+
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <span className="text-[7px] text-teal-400 uppercase tracking-widest font-black block leading-none">HAazir Premium Pay</span>
+                                    <div className="w-7 h-5 bg-gradient-to-br from-amber-300 to-amber-500 rounded-sm mt-2 opacity-85 shadow-sm border border-amber-400/20 flex items-center justify-center">
+                                      {/* Chip lines */}
+                                      <div className="grid grid-cols-2 gap-0.5 w-4 h-3.5">
+                                        <div className="border border-amber-600/30 rounded-2xs" />
+                                        <div className="border border-amber-600/30 rounded-2xs" />
+                                        <div className="border border-amber-600/30 rounded-2xs" />
+                                        <div className="border border-amber-600/30 rounded-2xs" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    {/* Visa overlay circles */}
+                                    <div className="flex -space-x-1 justify-end">
+                                      <div className="w-4 h-4 rounded-full bg-teal-500/80 mix-blend-screen" />
+                                      <div className="w-4 h-4 rounded-full bg-emerald-400/80 mix-blend-screen" />
+                                    </div>
+                                    <span className="text-[7px] block font-mono text-teal-300 font-extrabold tracking-wide uppercase mt-0.5">MockCard</span>
+                                  </div>
+                                </div>
+
+                                {/* Card Number display */}
+                                <div className="mt-4 font-mono text-center tracking-widest text-xs font-bold leading-none text-teal-100 drop-shadow-sm select-none">
+                                  {paymentCardNumber || '•••• •••• •••• ••••'}
+                                </div>
+
+                                <div className="flex justify-between items-end mt-4">
+                                  <div className="truncate pr-4 flex-1">
+                                    <span className="text-[6px] text-zinc-400 uppercase tracking-wider block font-bold leading-none">Cardholder</span>
+                                    <span className="text-[8px] font-bold text-white uppercase tracking-wide truncate block mt-0.5 leading-none font-mono">
+                                      {paymentCardName || (currentUser?.name || 'Ayesha Khan')}
+                                    </span>
+                                  </div>
+                                  <div className="shrink-0 flex gap-4 text-right">
+                                    <div>
+                                      <span className="text-[6px] text-zinc-400 uppercase tracking-wider block font-bold leading-none">Expires</span>
+                                      <span className="text-[8px] font-mono font-bold text-white block mt-0.5 leading-none">
+                                        {paymentCardExpiry || 'MM/YY'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-[6px] text-zinc-400 uppercase tracking-wider block font-bold leading-none">CVV</span>
+                                      <span className="text-[8px] font-mono font-bold text-white block mt-0.5 leading-none">
+                                        {paymentCardCVV ? '•••' : '000'}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                {/* Visa overlay circles */}
-                                <div className="flex -space-x-1 justify-end">
-                                  <div className="w-4 h-4 rounded-full bg-teal-500/80 mix-blend-screen" />
-                                  <div className="w-4 h-4 rounded-full bg-emerald-400/80 mix-blend-screen" />
+
+                              {/* Quick autofill suggestion button */}
+                              {selectedPaymentMethodId === 'custom_card' && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[8px] text-slate-400 font-bold select-none uppercase tracking-wider">Debit/Credit Card Details</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPaymentCardNumber('4242 4242 4242 4242');
+                                      setPaymentCardName(currentUser?.name?.toUpperCase() || 'AYESHA KHAN');
+                                      setPaymentCardExpiry('12/29');
+                                      setPaymentCardCVV('543');
+                                    }}
+                                    className={`text-[8px] font-extrabold px-2 py-1 rounded-lg border flex items-center gap-1 cursor-pointer transition-all ${
+                                      isDarkMode 
+                                        ? 'bg-teal-950/20 border-teal-800 text-teal-400 hover:bg-teal-900/30' 
+                                        : 'bg-teal-50 border-teal-100 text-teal-650 hover:bg-teal-100'
+                                    }`}
+                                  >
+                                    ⚡ Pre-fill Test Card
+                                  </button>
                                 </div>
-                                <span className="text-[7px] block font-mono text-teal-300 font-extrabold tracking-wide uppercase mt-0.5">MockCard</span>
-                              </div>
-                            </div>
+                              )}
 
-                            {/* Card Number display */}
-                            <div className="mt-4 font-mono text-center tracking-widest text-xs font-bold leading-none text-teal-100 drop-shadow-sm select-none">
-                              {paymentCardNumber || '•••• •••• •••• ••••'}
-                            </div>
-
-                            <div className="flex justify-between items-end mt-4">
-                              <div className="truncate pr-4 flex-1">
-                                <span className="text-[6px] text-zinc-400 uppercase tracking-wider block font-bold leading-none">Cardholder</span>
-                                <span className="text-[8px] font-bold text-white uppercase tracking-wide truncate block mt-0.5 leading-none font-mono">
-                                  {paymentCardName || (currentUser?.name || 'Ayesha Khan')}
-                                </span>
-                              </div>
-                              <div className="shrink-0 flex gap-4 text-right">
+                              {/* Real Inputs Form fields */}
+                              <div className="space-y-2.5">
                                 <div>
-                                  <span className="text-[6px] text-zinc-400 uppercase tracking-wider block font-bold leading-none">Expires</span>
-                                  <span className="text-[8px] font-mono font-bold text-white block mt-0.5 leading-none">
-                                    {paymentCardExpiry || 'MM/YY'}
-                                  </span>
+                                  <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1 block">Cardholder Name</label>
+                                  <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-2xs z-30 font-bold">BY:</span>
+                                    <input
+                                      type="text"
+                                      value={paymentCardName}
+                                      onChange={(e) => setPaymentCardName(e.target.value.toUpperCase())}
+                                      placeholder={currentUser?.name?.toUpperCase() || 'AYESHA KHAN'}
+                                      className={`w-full border rounded-xl pl-8 pr-3 py-2 text-2xs font-bold uppercase transition-all focus:outline-none focus:ring-1 focus:ring-teal-500 ${
+                                        isDarkMode 
+                                          ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-750' 
+                                          : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450 shadow-2xs'
+                                      }`}
+                                    />
+                                  </div>
                                 </div>
+
                                 <div>
-                                  <span className="text-[6px] text-zinc-400 uppercase tracking-wider block font-bold leading-none">CVV</span>
-                                  <span className="text-[8px] font-mono font-bold text-white block mt-0.5 leading-none">
-                                    {paymentCardCVV ? '•••' : '000'}
-                                  </span>
+                                  <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1 block">Card Number</label>
+                                  <input
+                                    type="text"
+                                    maxLength={19}
+                                    value={paymentCardNumber}
+                                    onChange={(e) => {
+                                      // format card number with spaces every 4 characters
+                                      const rawVal = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+                                      const parts = [];
+                                      for (let i = 0; i < rawVal.length; i += 4) {
+                                        parts.push(rawVal.substring(i, i + 4));
+                                      }
+                                      setPaymentCardNumber(parts.join(' '));
+                                    }}
+                                    placeholder="4000 1234 5678 9010"
+                                    className={`w-full border rounded-xl px-3 py-2 text-2xs font-mono font-bold transition-all focus:outline-none focus:ring-1 focus:ring-teal-500 ${
+                                      isDarkMode 
+                                        ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-750' 
+                                        : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450 shadow-2xs'
+                                    }`}
+                                  />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1 block">Expiry Date</label>
+                                    <input
+                                      type="text"
+                                      maxLength={5}
+                                      value={paymentCardExpiry}
+                                      onChange={(e) => {
+                                        const cleanText = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+                                        if (cleanText.length > 2) {
+                                          setPaymentCardExpiry(`${cleanText.slice(0, 2)}/${cleanText.slice(2, 4)}`);
+                                        } else {
+                                          setPaymentCardExpiry(cleanText);
+                                        }
+                                      }}
+                                      placeholder="MM/YY"
+                                      className={`w-full border rounded-xl px-3 py-2 text-2xs font-mono font-bold transition-all focus:outline-none focus:ring-1 focus:ring-teal-500 ${
+                                        isDarkMode 
+                                          ? 'bg-slate-905 border-slate-800 text-white placeholder-slate-750' 
+                                          : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450 shadow-2xs'
+                                      }`}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1 block">CVV Code</label>
+                                    <input
+                                      type="password"
+                                      maxLength={3}
+                                      value={paymentCardCVV}
+                                      onChange={(e) => setPaymentCardCVV(e.target.value.replace(/[^0-9]/g, ''))}
+                                      placeholder="•••"
+                                      className={`w-full border rounded-xl px-3 py-2 text-2xs font-mono font-bold transition-all focus:outline-none focus:ring-1 focus:ring-teal-500 ${
+                                        isDarkMode 
+                                          ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-750' 
+                                          : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450 shadow-2xs'
+                                      }`}
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-
-                          {/* Quick autofill suggestion button */}
-                          <div className="flex items-center justify-between">
-                            <span className="text-[8px] text-slate-400 font-bold select-none uppercase tracking-wider">Debit/Credit Card Details</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPaymentCardNumber('4242 4242 4242 4242');
-                                setPaymentCardName(currentUser?.name?.toUpperCase() || 'AYESHA KHAN');
-                                setPaymentCardExpiry('12/29');
-                                setPaymentCardCVV('543');
-                              }}
-                              className={`text-[8px] font-extrabold px-2 py-1 rounded-lg border flex items-center gap-1 cursor-pointer transition-all ${
-                                isDarkMode 
-                                  ? 'bg-teal-950/20 border-teal-800 text-teal-400 hover:bg-teal-900/30' 
-                                  : 'bg-teal-50 border-teal-100 text-teal-650 hover:bg-teal-100'
-                              }`}
-                            >
-                              ⚡ Pre-fill Test Card
-                            </button>
-                          </div>
-
-                          {/* Real Inputs Form fields */}
-                          <div className="space-y-2.5">
-                            <div>
-                              <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1 block">Cardholder Name</label>
-                              <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-2xs z-30 font-bold">BY:</span>
-                                <input
-                                  type="text"
-                                  value={paymentCardName}
-                                  onChange={(e) => setPaymentCardName(e.target.value.toUpperCase())}
-                                  placeholder={currentUser?.name?.toUpperCase() || 'AYESHA KHAN'}
-                                  className={`w-full border rounded-xl pl-8 pr-3 py-2 text-2xs font-bold uppercase transition-all focus:outline-none focus:ring-1 focus:ring-teal-500 ${
-                                    isDarkMode 
-                                      ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-750' 
-                                      : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450 shadow-2xs'
-                                  }`}
-                                />
-                              </div>
-                            </div>
-
-                            <div>
-                              <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1 block">Card Number</label>
-                              <input
-                                type="text"
-                                maxLength={19}
-                                value={paymentCardNumber}
-                                onChange={(e) => {
-                                  // format card number with spaces every 4 characters
-                                  const rawVal = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-                                  const parts = [];
-                                  for (let i = 0; i < rawVal.length; i += 4) {
-                                    parts.push(rawVal.substring(i, i + 4));
-                                  }
-                                  setPaymentCardNumber(parts.join(' '));
-                                }}
-                                placeholder="4000 1234 5678 9010"
-                                className={`w-full border rounded-xl px-3 py-2 text-2xs font-mono font-bold transition-all focus:outline-none focus:ring-1 focus:ring-teal-500 ${
-                                  isDarkMode 
-                                    ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-750' 
-                                    : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450 shadow-2xs'
-                                }`}
-                              />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1 block">Expiry Date</label>
-                                <input
-                                  type="text"
-                                  maxLength={5}
-                                  value={paymentCardExpiry}
-                                  onChange={(e) => {
-                                    const cleanText = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-                                    if (cleanText.length > 2) {
-                                      setPaymentCardExpiry(`${cleanText.slice(0, 2)}/${cleanText.slice(2, 4)}`);
-                                    } else {
-                                      setPaymentCardExpiry(cleanText);
-                                    }
-                                  }}
-                                  placeholder="MM/YY"
-                                  className={`w-full border rounded-xl px-3 py-2 text-2xs font-mono font-bold transition-all focus:outline-none focus:ring-1 focus:ring-teal-500 ${
-                                    isDarkMode 
-                                      ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-750' 
-                                      : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450 shadow-2xs'
-                                  }`}
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1 block">CVV Code</label>
-                                <input
-                                  type="password"
-                                  maxLength={3}
-                                  value={paymentCardCVV}
-                                  onChange={(e) => setPaymentCardCVV(e.target.value.replace(/[^0-9]/g, ''))}
-                                  placeholder="•••"
-                                  className={`w-full border rounded-xl px-3 py-2 text-2xs font-mono font-bold transition-all focus:outline-none focus:ring-1 focus:ring-teal-500 ${
-                                    isDarkMode 
-                                      ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-750' 
-                                      : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450 shadow-2xs'
-                                  }`}
-                                />
-                              </div>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       )}
 
@@ -2297,7 +2702,13 @@ export default function PhoneSimulator({
                             </div>
                             <div className="flex justify-between text-slate-500">
                               <span>Account Source:</span>
-                              <span className={`font-semibold font-mono ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>CARD ending in {paymentCardNumber.slice(-4) || '4242'}</span>
+                              <span className={`font-semibold font-mono ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                {selectedPaymentMethodId === 'easypaisa' ? 'EasyPaisa Wallet' :
+                                 selectedPaymentMethodId === 'jazzcash' ? 'JazzCash Wallet' :
+                                 selectedPaymentMethodId === 'master_9081' ? 'Mastercard (**9081)' :
+                                 selectedPaymentMethodId === 'visa_xxxx' ? 'Visa (**4242)' :
+                                 `Card ending in ${paymentCardNumber.slice(-4) || '4242'}`}
+                              </span>
                             </div>
                             <div className={`border-t pt-2 mt-1.5 flex justify-between font-bold text-2xs ${isDarkMode ? 'border-slate-800' : 'border-slate-150'}`}>
                               <span className="text-teal-600">Total authorized charge</span>
@@ -2314,21 +2725,36 @@ export default function PhoneSimulator({
                         <button
                           type="button"
                           onClick={() => {
-                            if (!paymentCardNumber.trim() || paymentCardNumber.length < 15) {
-                              alert('Please provide a valid 16-digit credit card number!');
-                              return;
-                            }
-                            if (!paymentCardName.trim()) {
-                              alert('Please enter the Cardholder Name!');
-                              return;
-                            }
-                            if (!paymentCardExpiry.trim() || paymentCardExpiry.length < 5) {
-                              alert('Please specify expiration as MM/YY!');
-                              return;
-                            }
-                            if (!paymentCardCVV.trim() || paymentCardCVV.length < 3) {
-                              alert('Please specify the 3-digit CVV secure code!');
-                              return;
+                            if (selectedPaymentMethodId === 'easypaisa' || selectedPaymentMethodId === 'jazzcash') {
+                              if (!walletPhone.trim()) {
+                                alert('Please provide your registered mobile number!');
+                                return;
+                              }
+                              if (!walletOTPSent) {
+                                alert('Please click "Request OTP verification code" first to verify your phone number!');
+                                return;
+                              }
+                              if (!walletOTP.trim() || walletOTP.length < 4) {
+                                alert('Please enter the 4-digit SMS OTP code sent to your phone! (Hint: use Auto-fill OTP)');
+                                return;
+                              }
+                            } else {
+                              if (!paymentCardNumber.trim() || paymentCardNumber.length < 15) {
+                                alert('Please provide a valid credit card number!');
+                                return;
+                              }
+                              if (!paymentCardName.trim()) {
+                                alert('Please enter the Cardholder Name!');
+                                return;
+                              }
+                              if (!paymentCardExpiry.trim() || paymentCardExpiry.length < 5) {
+                                alert('Please specify expiration as MM/YY!');
+                                return;
+                              }
+                              if (!paymentCardCVV.trim() || paymentCardCVV.length < 3) {
+                                alert('Please specify the 3-digit CVV secure code!');
+                                return;
+                              }
                             }
 
                             // Advance to processor loader screen
@@ -2405,6 +2831,22 @@ export default function PhoneSimulator({
                             <span>Total Cash Amount</span>
                             <span className={`font-extrabold ${isDarkMode ? 'text-teal-400' : 'text-teal-650'}`}>PKR {activeBooking.price.total * 100}</span>
                           </div>
+                        </div>
+
+                        {/* Interactive receipt view & download triggers */}
+                        <div className="mt-3 pt-2.5 border-t border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-between gap-1">
+                          <span className="text-[7.5px] uppercase font-black text-slate-400 tracking-wider">Record Vault:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedReceiptBooking(activeBooking);
+                              setShowReceiptModal(true);
+                            }}
+                            className="bg-teal-600 hover:bg-teal-700 text-white font-extrabold px-2.5 py-1 rounded-lg text-[8px] flex items-center gap-1 transition-all shadow-xs cursor-pointer hover:scale-[1.02]"
+                          >
+                            <Download size={9} />
+                            <span>Download Receipt PDF</span>
+                          </button>
                         </div>
                       </div>
 
@@ -2618,10 +3060,17 @@ export default function PhoneSimulator({
                                       )}
                                     </>
                                   ) : b.status === 'completed' ? (
-                                    <div className="flex items-center gap-1 text-slate-500 text-[9px] font-sans">
-                                      <CheckCircle2 size={12} className="text-slate-450" />
-                                      <span>Archived</span>
-                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedReceiptBooking(b);
+                                        setShowReceiptModal(true);
+                                      }}
+                                      className="bg-teal-50 dark:bg-teal-950/40 text-teal-650 dark:text-teal-400 border border-teal-100 dark:border-teal-900/40 text-[8.5px] font-black py-1 px-2 rounded flex items-center gap-1 transition-all cursor-pointer hover:scale-[1.02]"
+                                    >
+                                      <Receipt size={11} className="text-teal-500" />
+                                      <span>View Receipt</span>
+                                    </button>
                                   ) : b.status === 'cancelled' ? (
                                     <div className="flex items-center gap-1 text-red-500 text-[9px] font-sans">
                                       <XCircle size={12} className="text-red-400" />
@@ -2656,19 +3105,27 @@ export default function PhoneSimulator({
                 <div>
                   {/* Provider Header details */}
                   <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowWorkerProfile(true)}
+                      className="flex items-center gap-2.5 text-left cursor-pointer hover:opacity-85 transition-all outline-none"
+                      title="View Detailed Profile"
+                    >
                       <img
                         src="https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=150&q=80"
                         alt="worker profile"
-                        className={`w-9 h-9 rounded-full object-cover border-2 ${
+                        className={`w-9 h-9 rounded-full object-cover border-2 shrink-0 ${
                           isWorkerOnline ? 'border-teal-600' : 'border-slate-300'
                         }`}
                       />
                       <div>
-                        <div className="font-extrabold text-slate-800 text-2xs truncate max-w-[100px]">{currentUser?.name || 'Ahmed Kamal'}</div>
+                        <div className="font-extrabold text-slate-800 text-2xs truncate max-w-[105px] flex items-center gap-1">
+                          <span>{currentUser?.name || 'Ahmed Kamal'}</span>
+                          <span className="text-[7px] text-teal-600 dark:text-teal-400 font-extrabold">PRO</span>
+                        </div>
                         <span className="text-[9px] text-slate-450 font-semibold uppercase tracking-wider block">{currentUser?.specialty || 'Electrician'}</span>
                       </div>
-                    </div>
+                    </button>
 
                     <div className="flex items-center gap-2">
                       <button 
@@ -2720,10 +3177,22 @@ export default function PhoneSimulator({
                     </div>
                     <div>
                       <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">My Rating</div>
-                      <div className="flex items-center justify-center gap-0.5 font-bold text-2xs mt-0.5">
-                        <Star size={9} className="text-amber-500 fill-amber-300 animate-pulse" />
+                      <button
+                        type="button"
+                        onClick={() => setShowWorkerProfile(true)}
+                        className="flex items-center justify-center gap-0.5 font-bold text-2xs mt-0.5 mx-auto hover:text-teal-650 cursor-pointer transition-all outline-none"
+                        title="View Completed Jobs & Ratings"
+                      >
+                        <Star size={9} className="text-amber-500 fill-amber-300 animate-pulse shrink-0" />
                         <span className={isDarkMode ? 'text-slate-100' : 'text-slate-850'}>4.88</span>
-                      </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowWorkerProfile(true)}
+                        className="text-[6.5px] text-teal-600 dark:text-teal-400 font-extrabold block mx-auto hover:underline cursor-pointer tracking-wider mt-0.5 uppercase"
+                      >
+                        Reviews &gt;
+                      </button>
                     </div>
                   </div>
 
@@ -2732,7 +3201,7 @@ export default function PhoneSimulator({
                     <button
                       type="button"
                       onClick={() => setWorkerTab('jobs')}
-                      className={`flex-1 text-center py-1.5 rounded-lg text-2xs font-extrabold cursor-pointer transition-all ${
+                      className={`flex-1 text-center py-1.5 rounded-lg text-3xs font-extrabold cursor-pointer transition-all ${
                         workerTab === 'jobs'
                           ? 'bg-white dark:bg-slate-805 text-teal-650 dark:text-teal-400 shadow-sm border border-slate-200/20 dark:border-slate-700/35'
                           : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
@@ -2743,7 +3212,7 @@ export default function PhoneSimulator({
                     <button
                       type="button"
                       onClick={() => setWorkerTab('insights')}
-                      className={`flex-1 text-center py-1.5 rounded-lg text-2xs font-extrabold cursor-pointer transition-all ${
+                      className={`flex-1 text-center py-1.5 rounded-lg text-3xs font-extrabold cursor-pointer transition-all ${
                         workerTab === 'insights'
                           ? 'bg-white dark:bg-slate-805 text-teal-650 dark:text-teal-400 shadow-sm border border-slate-200/20 dark:border-slate-700/35'
                           : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
@@ -2751,9 +3220,20 @@ export default function PhoneSimulator({
                     >
                       Market Insights
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setWorkerTab('analytics')}
+                      className={`flex-1 text-center py-1.5 rounded-lg text-3xs font-extrabold cursor-pointer transition-all ${
+                        workerTab === 'analytics'
+                          ? 'bg-white dark:bg-slate-805 text-teal-650 dark:text-teal-400 shadow-sm border border-slate-200/20 dark:border-slate-700/35'
+                          : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      Analytics Trends
+                    </button>
                   </div>
 
-                  {workerTab === 'jobs' ? (
+                  {workerTab === 'jobs' && (
                     <>
                       {/* JOB ASSIGNMENT STACK PANEL (technician accepted a job) */}
                       {activeBooking && activeBooking.status !== 'pending' && activeBooking.status !== 'completed' && (
@@ -2921,7 +3401,9 @@ export default function PhoneSimulator({
                         )}
                       </div>
                     </>
-                  ) : (
+                  )}
+
+                  {workerTab === 'insights' && (
                     /* INSIGHTS / ANALYTICS DISPLAY PANEL WITH RECHARTS */
                     <div className="space-y-3 animate-fade-in pb-2">
                       {/* Summary card */}
@@ -3094,12 +3576,25 @@ export default function PhoneSimulator({
                       </div>
                     </div>
                   )}
+
+                  {workerTab === 'analytics' && (
+                    <Analytics bookings={allBookings || []} isDarkMode={isDarkMode} />
+                  )}
                 </div>
 
                 {/* Switch indicator */}
                 <span className="block text-[8px] text-slate-400 font-medium text-center italic">
                   Tap 'Customer View' in header to change perspectives
                 </span>
+
+                {showWorkerProfile && (
+                  <WorkerProfile 
+                    currentUser={currentUser}
+                    bookings={allBookings || []}
+                    isDarkMode={isDarkMode}
+                    onClose={() => setShowWorkerProfile(false)}
+                  />
+                )}
 
               </div>
             )}
@@ -3299,6 +3794,26 @@ export default function PhoneSimulator({
             </div>
           )}
 
+          {showReceiptModal && selectedReceiptBooking && (
+            <ReceiptModal 
+              booking={selectedReceiptBooking}
+              isDarkMode={isDarkMode}
+              onClose={() => {
+                setShowReceiptModal(false);
+                setSelectedReceiptBooking(null);
+              }}
+            />
+          )}
+
+          {showHelpModal && (
+            <HelpSupportModal 
+              currentUser={currentUser}
+              isDarkMode={isDarkMode}
+              onClose={() => setShowHelpModal(false)}
+              language={language}
+            />
+          )}
+
           </div>
 
           {/* iOS Home Indicator Bar */}
@@ -3323,11 +3838,19 @@ export default function PhoneSimulator({
                 onClick={() => {
                   setCustomerScreen('bookings');
                 }}
-                className={`flex flex-col items-center gap-0.5 cursor-pointer ${
+                className={`flex flex-col items-center gap-0.5 cursor-pointer relative ${
                   customerScreen === 'bookings' ? 'text-teal-600' : 'text-slate-400'
                 }`}
               >
-                <Briefcase size={12} />
+                <div className="relative">
+                  <Briefcase size={12} />
+                  {reminderBookings.length > 0 && (
+                    <>
+                      <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping" />
+                      <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-rose-600 rounded-full" />
+                    </>
+                  )}
+                </div>
                 <span className="text-[8px] font-bold font-sans">Bookings</span>
               </button>
 
@@ -3343,11 +3866,19 @@ export default function PhoneSimulator({
                     alert('You have no active booking to track. Search services to raise a professional request!');
                   }
                 }}
-                className={`flex flex-col items-center gap-0.5 cursor-pointer ${
+                className={`flex flex-col items-center gap-0.5 cursor-pointer relative ${
                   customerScreen === 'tracking' || customerScreen === 'completed' ? 'text-teal-650' : 'text-slate-400'
                 }`}
               >
-                <Activity size={12} />
+                <div className="relative">
+                  <Activity size={12} />
+                  {reminderBookings.some((b) => b.id === activeBooking?.id) && (
+                    <>
+                      <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping" />
+                      <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-rose-600 rounded-full" />
+                    </>
+                  )}
+                </div>
                 <span className="text-[8px] font-bold font-sans">Tracker</span>
               </button>
             </div>

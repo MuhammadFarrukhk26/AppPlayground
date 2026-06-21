@@ -286,9 +286,13 @@ export default function App() {
     }
   };
 
-  const handleAdvanceJob = async () => {
+  const handleAdvanceJob = async (id?: string) => {
     try {
-      const res = await fetch('/api/worker/advance-job', { method: 'POST' });
+      const res = await fetch('/api/worker/advance-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
       if (res.ok) {
         const data = await res.json();
         setActiveBooking(data.booking);
@@ -304,12 +308,12 @@ export default function App() {
     }
   };
 
-  const handleSubmitRating = async (stars: number, text: string) => {
+  const handleSubmitRating = async (stars: number, text: string, id?: string) => {
     try {
       const res = await fetch('/api/bookings/rate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stars, feedback: text })
+        body: JSON.stringify({ stars, feedback: text, id })
       });
       if (res.ok) {
         setActiveBooking(null);
@@ -327,12 +331,12 @@ export default function App() {
     }
   };
 
-  const handleSendMessage = async (sender: 'customer' | 'worker', text: string) => {
+  const handleSendMessage = async (sender: 'customer' | 'worker', text: string, bookingId?: string) => {
     try {
       const res = await fetch('/api/chat/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sender, text })
+        body: JSON.stringify({ sender, text, bookingId })
       });
       if (res.ok) {
         const data = await res.json();

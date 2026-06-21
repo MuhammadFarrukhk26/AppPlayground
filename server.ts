@@ -70,6 +70,7 @@ interface ChatMessage {
   sender: "customer" | "worker";
   text: string;
   timestamp: string;
+  bookingId?: string;
 }
 
 interface ActionLog {
@@ -95,7 +96,44 @@ interface SystemState {
 const DEFAULT_STATE: SystemState = {
   activeBooking: null,
   isWorkerOnline: true,
-  jobInvites: [],
+  jobInvites: [
+    {
+      id: "HZ-75412",
+      service: "PLUMBER",
+      subService: "Kitchen Sink Siphon & Drainage leak",
+      address: "KDA Scheme 1, Block A, House 77, Karachi",
+      slot: "Tomorrow, 11:30 AM",
+      description: "Water dripping under kitchen sink, cabinet wood getting soft.",
+      price: { base: 18, work: 12, tax: 2, total: 32 },
+      customerName: "Imran Siddiqui",
+      customerPhone: "+92 312 4567890",
+      distance: "2.4 km"
+    },
+    {
+      id: "HZ-99321",
+      service: "ELECTRICIAN",
+      subService: "Short circuit & distribution board sparking",
+      address: "Clifton Block 4, Sea Breeze Apt, Flat C-5, Karachi",
+      slot: "Today, ASAP Urgent",
+      description: "Whenever ac is turned on, main circuit breaker trips immediately.",
+      price: { base: 15, work: 25, tax: 2, total: 42 },
+      customerName: "Zehra Naqvi",
+      customerPhone: "+92 333 1122334",
+      distance: "0.8 km"
+    },
+    {
+      id: "HZ-51104",
+      service: "AC_REPAIR",
+      subService: "Split AC Gas Leakage test & Charging",
+      address: "Gulshan-e-Iqbal, Block 5, House 102, Karachi",
+      slot: "Tomorrow, 03:00 PM",
+      description: "Fan blows normal air, cooling coil is freezing and ice dynamic forming.",
+      price: { base: 20, work: 30, tax: 3, total: 53 },
+      customerName: "Dr. Farhan",
+      customerPhone: "+92 301 7766554",
+      distance: "3.7 km"
+    }
+  ],
   chatMessages: [],
   allBookings: [
     {
@@ -449,22 +487,72 @@ app.post("/api/worker/toggle-online", (req, res) => {
 
   if (!isOnline) {
     serverState.jobInvites = [];
-  } else if (serverState.activeBooking && serverState.activeBooking.status === "pending") {
-    // Dispatch active pending jobs
-    const inviteJob: JobInvite = {
-      id: serverState.activeBooking.id,
-      service: serverState.activeBooking.service,
-      subService: serverState.activeBooking.subService,
-      address: serverState.activeBooking.address,
-      slot: serverState.activeBooking.slot,
-      description: serverState.activeBooking.description,
-      price: serverState.activeBooking.price,
-      customerName: serverState.customerUser?.name || "Ayesha Khan",
-      customerPhone: serverState.customerUser?.phone || "+92 321 9876543",
-      distance: "1.2 km",
-    };
-    serverState.jobInvites = [inviteJob];
-    addServerLog(`Re-dispatched active pending ticket ${serverState.activeBooking.id} to newly online Worker`, "system");
+  } else {
+    const activeInvites = [];
+    if (serverState.activeBooking && serverState.activeBooking.status === "pending") {
+      // Dispatch active pending jobs
+      const inviteJob: JobInvite = {
+        id: serverState.activeBooking.id,
+        service: serverState.activeBooking.service,
+        subService: serverState.activeBooking.subService,
+        address: serverState.activeBooking.address,
+        slot: serverState.activeBooking.slot,
+        description: serverState.activeBooking.description,
+        price: serverState.activeBooking.price,
+        customerName: serverState.customerUser?.name || "Ayesha Khan",
+        customerPhone: serverState.customerUser?.phone || "+92 321 9876543",
+        distance: "1.2 km",
+      };
+      activeInvites.push(inviteJob);
+      addServerLog(`Re-dispatched active pending ticket ${serverState.activeBooking.id} to newly online Worker`, "system");
+    }
+
+    const simulatedStandby = [
+      {
+        id: "HZ-75412",
+        service: "PLUMBER",
+        subService: "Kitchen Sink Siphon & Drainage leak",
+        address: "KDA Scheme 1, Block A, House 77, Karachi",
+        slot: "Tomorrow, 11:30 AM",
+        description: "Water dripping under kitchen sink, cabinet wood getting soft.",
+        price: { base: 18, work: 12, tax: 2, total: 32 },
+        customerName: "Imran Siddiqui",
+        customerPhone: "+92 312 4567890",
+        distance: "2.4 km"
+      },
+      {
+        id: "HZ-99321",
+        service: "ELECTRICIAN",
+        subService: "Short circuit & distribution board sparking",
+        address: "Clifton Block 4, Sea Breeze Apt, Flat C-5, Karachi",
+        slot: "Today, ASAP Urgent",
+        description: "Whenever ac is turned on, main circuit breaker trips immediately.",
+        price: { base: 15, work: 25, tax: 2, total: 42 },
+        customerName: "Zehra Naqvi",
+        customerPhone: "+92 333 1122334",
+        distance: "0.8 km"
+      },
+      {
+        id: "HZ-51104",
+        service: "AC_REPAIR",
+        subService: "Split AC Gas Leakage test & Charging",
+        address: "Gulshan-e-Iqbal, Block 5, House 102, Karachi",
+        slot: "Tomorrow, 03:00 PM",
+        description: "Fan blows normal air, cooling coil is freezing and ice dynamic forming.",
+        price: { base: 20, work: 30, tax: 3, total: 53 },
+        customerName: "Dr. Farhan",
+        customerPhone: "+92 301 7766554",
+        distance: "3.7 km"
+      }
+    ];
+
+    serverState.jobInvites = [
+      ...activeInvites,
+      ...simulatedStandby.filter(s => {
+        const found = serverState.allBookings.find(b => b.id === s.id);
+        return !found || found.status === "pending";
+      })
+    ];
   }
 
   saveState();
@@ -474,14 +562,15 @@ app.post("/api/worker/toggle-online", (req, res) => {
 // Worker accepts job offer
 app.post("/api/worker/accept-job", (req, res) => {
   const { id } = req.body;
-  if (!serverState.activeBooking || serverState.activeBooking.id !== id) {
-    return res.status(400).json({ success: false, error: "No matching pending job request available." });
+  
+  // Find structural booking in allBookings
+  const booking = serverState.allBookings.find((b) => b.id === id);
+  if (!booking) {
+    return res.status(404).json({ success: false, error: "No matching pending job request available in database records." });
   }
 
   const wName = serverState.workerUser?.name || "Ahmed Kamal";
-
-  serverState.activeBooking.status = "assigned";
-  serverState.activeBooking.provider = {
+  const providerInfo = {
     id: serverState.workerUser?.id || "work-1",
     name: wName,
     avatar: "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=150&q=80",
@@ -491,99 +580,135 @@ app.post("/api/worker/accept-job", (req, res) => {
     specialty: `${serverState.workerUser?.specialty || "Electrician"} Specialist`,
   };
 
-  // Sync historical value
-  serverState.allBookings = serverState.allBookings.map((b) =>
-    b.id === id ? { ...b, status: "assigned", provider: serverState.activeBooking!.provider } : b
-  );
+  booking.status = "assigned";
+  booking.provider = providerInfo;
 
-  serverState.jobInvites = [];
+  // Update in global activeBooking if it matches
+  if (serverState.activeBooking && serverState.activeBooking.id === id) {
+    serverState.activeBooking.status = "assigned";
+    serverState.activeBooking.provider = providerInfo;
+  }
 
-  // Seed welcome messaging
-  serverState.chatMessages = [
-    {
-      id: "welcome-1",
-      sender: "worker",
-      text: `Assalam-o-Alaikum! My name is ${wName}. I have accepted your request. I am gathering my tools and will head to your location shortly.`,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    },
-  ];
+  // Remove accepted job ID from job invites (keep other invites in list!)
+  serverState.jobInvites = serverState.jobInvites.filter((invite) => invite.id !== id);
+
+  // Seed welcome messaging for this booking
+  const welcomeStr = `Assalam-o-Alaikum! My name is ${wName}. I have accepted your request. I am gathering my tools and will head to your location shortly.`;
+  const welcomeMsg = {
+    id: `welcome-${id}-${Date.now()}`,
+    sender: "worker" as const,
+    text: welcomeStr,
+    timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    bookingId: id,
+  };
+  serverState.chatMessages.push(welcomeMsg);
 
   addServerLog(`Worker ${wName} ACCEPTED Job ${id}. Status advanced to ASSIGNED.`, "worker");
   saveState();
 
-  res.json({ success: true, booking: serverState.activeBooking, chatMessages: serverState.chatMessages });
+  res.json({ success: true, booking, chatMessages: serverState.chatMessages });
 });
 
 // Worker declines job offer
 app.post("/api/worker/decline-job", (req, res) => {
   const { id } = req.body;
   const wName = serverState.workerUser?.name || "Ahmed Kamal";
-  serverState.jobInvites = [];
+  
+  // Remove from invitations
+  serverState.jobInvites = serverState.jobInvites.filter((invite) => invite.id !== id);
+
   addServerLog(`Worker ${wName} DECLINED Job ticket ${id}. Searching alternate providers.`, "worker");
   saveState();
-  res.json({ success: true });
+  res.json({ success: true, jobInvites: serverState.jobInvites });
 });
 
 // Worker advances job status ('assigned' -> 'in_progress' -> 'completed')
 app.post("/api/worker/advance-job", (req, res) => {
-  if (!serverState.activeBooking) {
-    return res.status(404).json({ success: false, error: "No active booking is running." });
+  const { id } = req.body;
+  
+  let targetId = id;
+  if (!targetId) {
+    // Look up the first active booking that is assigned to the current worker
+    const activeAssigned = serverState.allBookings.find(b => 
+      b.provider?.id === (serverState.workerUser?.id || "work-1") && 
+      (b.status === "assigned" || b.status === "in_progress")
+    );
+    targetId = activeAssigned ? activeAssigned.id : (serverState.activeBooking ? serverState.activeBooking.id : null);
+  }
+
+  if (!targetId) {
+    return res.status(404).json({ success: false, error: "No active booking running or assigned in queue." });
+  }
+
+  const booking = serverState.allBookings.find(b => b.id === targetId);
+  if (!booking) {
+    return res.status(404).json({ success: false, error: "Booking record was not found." });
   }
 
   const wName = serverState.workerUser?.name || "Ahmed Kamal";
-  const currentStatus = serverState.activeBooking.status;
+  const currentStatus = booking.status;
 
   if (currentStatus === "assigned") {
-    serverState.activeBooking.status = "in_progress";
-    addServerLog(`Worker ${wName} arrived on-site. Session status updated to IN_PROGRESS.`, "worker");
+    booking.status = "in_progress";
+    addServerLog(`Worker ${wName} arrived on-site for Job ${targetId}. Session status updated to IN_PROGRESS.`, "worker");
   } else if (currentStatus === "in_progress") {
-    serverState.activeBooking.status = "completed";
-    addServerLog(`Worker ${wName} resolved repair. Marked completed, bill invoice generated.`, "worker");
+    booking.status = "completed";
+    addServerLog(`Worker ${wName} resolved repair on-site for Job ${targetId}. Completed, bill invoice generated.`, "worker");
   }
 
-  // Update in history list
-  const activeId = serverState.activeBooking.id;
-  const finalStatus = serverState.activeBooking.status;
-  serverState.allBookings = serverState.allBookings.map((b) =>
-    b.id === activeId ? { ...b, status: finalStatus } : b
-  );
+  // Ensure mirrored to activeBooking if matching
+  if (serverState.activeBooking && serverState.activeBooking.id === targetId) {
+    serverState.activeBooking.status = booking.status;
+  }
 
   saveState();
-  res.json({ success: true, booking: serverState.activeBooking });
+  res.json({ success: true, booking, allBookings: serverState.allBookings });
 });
 
 // Customer rate and archive booking
 app.post("/api/bookings/rate", (req, res) => {
-  const { stars, feedback } = req.body;
-  if (!serverState.activeBooking) {
+  const { stars, feedback, id } = req.body;
+  const targetId = id || (serverState.activeBooking ? serverState.activeBooking.id : null);
+
+  if (!targetId) {
     return res.status(404).json({ success: false, error: "No active booking exists to rate." });
   }
 
-  const rateId = serverState.activeBooking.id;
-  addServerLog(`Customer rated the visit (${stars} Stars). Comments: "${feedback || "Perfect service"}"`, "customer");
-  addServerLog(`Transaction ${rateId} successfully completed and archived.`, "system");
+  const booking = serverState.allBookings.find(b => b.id === targetId);
+  if (booking) {
+    booking.status = "completed";
+  }
 
-  // Keep it archived in allBookings, but clean active state
-  serverState.activeBooking = null;
-  serverState.chatMessages = [];
-  serverState.jobInvites = [];
+  addServerLog(`Customer rated Job ${targetId} (${stars} Stars). Comments: "${feedback || "Perfect service"}"`, "customer");
+  addServerLog(`Transaction ${targetId} successfully completed and archived.`, "system");
+
+  // Keep it archived in allBookings, but clean active state if matching
+  if (serverState.activeBooking && serverState.activeBooking.id === targetId) {
+    serverState.activeBooking = null;
+  }
+  
+  // Clean related chat messages if they belonged to this booking
+  serverState.chatMessages = serverState.chatMessages.filter(msg => msg.bookingId !== targetId);
 
   saveState();
-  res.json({ success: true });
+  res.json({ success: true, allBookings: serverState.allBookings });
 });
 
 // Send Chat Message
 app.post("/api/chat/send", (req, res) => {
-  const { sender, text } = req.body;
+  const { sender, text, bookingId } = req.body;
   if (!sender || !text) {
     return res.status(400).json({ success: false, error: "Sender and text values are required." });
   }
+
+  const resolvedBookingId = bookingId || (serverState.activeBooking ? serverState.activeBooking.id : undefined);
 
   const newMessage: ChatMessage = {
     id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
     sender,
     text,
     timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    bookingId: resolvedBookingId,
   };
 
   serverState.chatMessages.push(newMessage);
@@ -593,7 +718,7 @@ app.post("/api/chat/send", (req, res) => {
       ? serverState.customerUser?.name || "Customer Ayesha Khan"
       : serverState.workerUser?.name || "Specialist Ahmed";
 
-  addServerLog(`${senderName} sent message: "${text}"`, sender);
+  addServerLog(`${senderName} sent message for Job ${resolvedBookingId || "General"}: "${text}"`, sender);
   saveState();
 
   res.json({ success: true, message: newMessage, chatMessages: serverState.chatMessages });
