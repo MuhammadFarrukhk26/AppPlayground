@@ -1,5 +1,5 @@
 import React from 'react';
-import { Radio, Bell, ArrowRight, UserCheck, CheckSquare, XCircle, Pocket } from 'lucide-react';
+import { Radio, Bell, ArrowRight, UserCheck, CheckSquare, XCircle, Pocket, Download } from 'lucide-react';
 import { ActionLog } from '../types';
 
 interface LogsStreamProps {
@@ -7,6 +7,23 @@ interface LogsStreamProps {
 }
 
 export default function LogsStream({ logs }: LogsStreamProps) {
+  const handleDownloadLogs = () => {
+    try {
+      const dataStr = JSON.stringify(logs, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `haazir-session-activity-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export activity logs:', error);
+    }
+  };
+
   return (
     <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col h-[560px]">
       
@@ -19,9 +36,19 @@ export default function LogsStream({ logs }: LogsStreamProps) {
           </div>
           <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">System Activity Feed</h4>
         </div>
-        <span className="text-[9px] text-slate-400 font-bold uppercase font-mono">
-          Socket Channel: HZ-LIVE
-        </span>
+        <div className="flex items-center gap-2.5">
+          <span className="text-[9px] text-slate-400 font-bold uppercase font-mono hidden sm:inline">
+            Channel: HZ-LIVE
+          </span>
+          <button
+            onClick={handleDownloadLogs}
+            className="flex items-center gap-1 px-2.5 py-1 bg-teal-50 hover:bg-teal-100/70 text-teal-600 hover:text-teal-700 border border-teal-150 rounded-xl text-[10px] font-bold transition-all cursor-pointer shadow-3xs hover:scale-[1.02] active:scale-[0.98]"
+            title="Download activity logs as JSON"
+          >
+            <Download size={11} className="stroke-[2.5]" />
+            <span>Export JSON</span>
+          </button>
+        </div>
       </div>
 
       {/* Description */}
