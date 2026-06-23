@@ -841,7 +841,7 @@ export default function PhoneSimulator({
 
   const handleCreateBookingSubmit = () => {
     if (!customIssue.trim()) {
-      alert('Please fill out the issue details!');
+      triggerToast('Required Input', 'Please fill out the issue details!', 'alert');
       return;
     }
     onCreateBooking(selectedCatKey, customIssue, address, slot, comments);
@@ -2016,6 +2016,7 @@ export default function PhoneSimulator({
                             src={activeBooking.provider.avatar}
                             alt="avatar"
                             className="w-10 h-10 rounded-full object-cover border-2 border-teal-500"
+                            referrerPolicy="no-referrer"
                           />
                           <div className="flex-1 min-w-0">
                             <div className={`font-extrabold text-2xs truncate ${isDarkMode ? 'text-slate-100' : 'text-slate-805 text-slate-800'}`}>{activeBooking.provider.name}</div>
@@ -2438,7 +2439,7 @@ export default function PhoneSimulator({
                                     type="button"
                                     onClick={() => {
                                       if (!walletPhone.trim() || walletPhone.length < 10) {
-                                        alert('Please provide a valid Pakistani 11-digit mobile number!');
+                                        triggerToast('Invalid Phone Number', 'Please provide a valid Pakistani 11-digit mobile number!', 'alert');
                                         return;
                                       }
                                       setWalletOTPSent(true);
@@ -2730,32 +2731,32 @@ export default function PhoneSimulator({
                           onClick={() => {
                             if (selectedPaymentMethodId === 'easypaisa' || selectedPaymentMethodId === 'jazzcash') {
                               if (!walletPhone.trim()) {
-                                alert('Please provide your registered mobile number!');
+                                triggerToast('Validation Error', 'Please provide your registered mobile number!', 'alert');
                                 return;
                               }
                               if (!walletOTPSent) {
-                                alert('Please click "Request OTP verification code" first to verify your phone number!');
+                                triggerToast('OTP Required', 'Please click "Request OTP verification code" first to verify your phone number!', 'alert');
                                 return;
                               }
                               if (!walletOTP.trim() || walletOTP.length < 4) {
-                                alert('Please enter the 4-digit SMS OTP code sent to your phone! (Hint: use Auto-fill OTP)');
+                                triggerToast('Verification Error', 'Please enter the 4-digit SMS OTP code sent to your phone! (Hint: use Auto-fill OTP)', 'alert');
                                 return;
                               }
                             } else {
                               if (!paymentCardNumber.trim() || paymentCardNumber.length < 15) {
-                                alert('Please provide a valid credit card number!');
+                                triggerToast('Payment Error', 'Please provide a valid credit card number!', 'alert');
                                 return;
                               }
                               if (!paymentCardName.trim()) {
-                                alert('Please enter the Cardholder Name!');
+                                triggerToast('Payment Error', 'Please enter the Cardholder Name!', 'alert');
                                 return;
                               }
                               if (!paymentCardExpiry.trim() || paymentCardExpiry.length < 5) {
-                                alert('Please specify expiration as MM/YY!');
+                                triggerToast('Payment Error', 'Please specify expiration as MM/YY!', 'alert');
                                 return;
                               }
                               if (!paymentCardCVV.trim() || paymentCardCVV.length < 3) {
-                                alert('Please specify the 3-digit CVV secure code!');
+                                triggerToast('Payment Error', 'Please specify the 3-digit CVV secure code!', 'alert');
                                 return;
                               }
                             }
@@ -3082,7 +3083,7 @@ export default function PhoneSimulator({
                                   ) : (
                                     <button
                                       onClick={() => {
-                                        alert(`Archived ${b.service} repair of ticket ${b.id}`);
+                                        triggerToast('Ticket Archive', `Archived ${b.service} repair of ticket ${b.id}`, 'info');
                                       }}
                                       className={`border text-[9px] font-extrabold py-1.5 px-2.5 rounded-lg transition-all cursor-pointer ${isDarkMode ? 'border-slate-800 text-slate-350 bg-slate-900 hover:bg-slate-800' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'}`}
                                     >
@@ -3120,6 +3121,7 @@ export default function PhoneSimulator({
                         className={`w-9 h-9 rounded-full object-cover border-2 shrink-0 ${
                           isWorkerOnline ? 'border-teal-600' : 'border-slate-300'
                         }`}
+                        referrerPolicy="no-referrer"
                       />
                       <div>
                         <div className="font-extrabold text-slate-800 text-2xs truncate max-w-[105px] flex items-center gap-1">
@@ -3435,23 +3437,21 @@ export default function PhoneSimulator({
                         <div className="flex items-center gap-3">
                           {/* Centered Donut Pie Chart */}
                           <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <PieChart>
-                                <Pie
-                                  data={OUTCOME_DATA}
-                                  cx="50%"
-                                  cy="50%"
-                                  innerRadius={20}
-                                  outerRadius={28}
-                                  paddingAngle={2}
-                                  dataKey="value"
-                                >
-                                  {OUTCOME_DATA.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                  ))}
-                                </Pie>
-                              </PieChart>
-                            </ResponsiveContainer>
+                            <PieChart width={64} height={64}>
+                              <Pie
+                                data={OUTCOME_DATA}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={20}
+                                outerRadius={28}
+                                paddingAngle={2}
+                                dataKey="value"
+                              >
+                                {OUTCOME_DATA.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Pie>
+                            </PieChart>
                             <div className="absolute text-center select-none">
                               <span className={`text-[10px] font-black ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>92%</span>
                               <span className="text-[5px] text-slate-400 block font-bold uppercase leading-none">Done</span>
@@ -3495,31 +3495,29 @@ export default function PhoneSimulator({
                           </span>
                         </div>
 
-                        <div className="h-20 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={COMPLETION_TREND_DATA} margin={{ top: 2, right: 2, left: -26, bottom: -5 }}>
-                              <defs>
-                                <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#0d9488" stopOpacity={0.25}/>
-                                  <stop offset="95%" stopColor="#0d9488" stopOpacity={0}/>
-                                </linearGradient>
-                              </defs>
-                              <XAxis dataKey="label" stroke="#94a3b8" fontSize={7} fontWeight="bold" tickLine={false} axisLine={false} />
-                              <YAxis stroke="#94a3b8" fontSize={7} fontWeight="bold" domain={[70, 100]} tickLine={false} axisLine={false} />
-                              <Tooltip 
-                                contentStyle={{ 
-                                  fontSize: '7.5px', 
-                                  padding: '4px', 
-                                  borderRadius: '6px', 
-                                  background: isDarkMode ? '#0f172a' : '#ffffff',
-                                  border: isDarkMode ? '1px solid #1e293b' : '1px solid #e2e8f0',
-                                  color: isDarkMode ? '#f8fafc' : '#0f172a'
-                                }} 
-                                labelStyle={{ fontWeight: 'black', color: '#0d9488' }}
-                              />
-                              <Area type="monotone" dataKey="rate" stroke="#0d9488" strokeWidth={1.5} fillOpacity={1} fill="url(#colorRate)" />
-                            </AreaChart>
-                          </ResponsiveContainer>
+                        <div className="h-20 w-full flex justify-center">
+                          <AreaChart width={250} height={80} data={COMPLETION_TREND_DATA} margin={{ top: 2, right: 2, left: -26, bottom: -5 }}>
+                            <defs>
+                              <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#0d9488" stopOpacity={0.25}/>
+                                <stop offset="95%" stopColor="#0d9488" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <XAxis dataKey="label" stroke="#94a3b8" fontSize={7} fontWeight="bold" tickLine={false} axisLine={false} />
+                            <YAxis stroke="#94a3b8" fontSize={7} fontWeight="bold" domain={[70, 100]} tickLine={false} axisLine={false} />
+                            <Tooltip 
+                              contentStyle={{ 
+                                fontSize: '7.5px', 
+                                padding: '4px', 
+                                borderRadius: '6px', 
+                                background: isDarkMode ? '#0f172a' : '#ffffff',
+                                border: isDarkMode ? '1px solid #1e293b' : '1px solid #e2e8f0',
+                                color: isDarkMode ? '#f8fafc' : '#0f172a'
+                              }} 
+                              labelStyle={{ fontWeight: 'black', color: '#0d9488' }}
+                            />
+                            <Area type="monotone" dataKey="rate" stroke="#0d9488" strokeWidth={1.5} fillOpacity={1} fill="url(#colorRate)" />
+                          </AreaChart>
                         </div>
                       </div>
 
@@ -3536,45 +3534,43 @@ export default function PhoneSimulator({
                           </span>
                         </div>
 
-                        <div className="h-24 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={CATEGORY_POPULARITY_DATA} layout="vertical" margin={{ top: 2, right: 5, left: -14, bottom: 0 }}>
-                              <XAxis type="number" hide />
-                              <YAxis 
-                                dataKey="name" 
-                                type="category" 
-                                stroke="#94a3b8" 
-                                fontSize={7.5} 
-                                fontWeight="bold" 
-                                tickLine={false} 
-                                axisLine={false}
-                                width={54}
-                              />
-                              <Tooltip 
-                                contentStyle={{ 
-                                  fontSize: '7.5px', 
-                                  padding: '4px', 
-                                  borderRadius: '6px', 
-                                  background: isDarkMode ? '#0f172a' : '#ffffff',
-                                  border: isDarkMode ? '1px solid #1e293b' : '1px solid #e2e8f0',
-                                  color: isDarkMode ? '#f8fafc' : '#0f172a'
-                                }}
-                              />
-                              <Bar dataKey="count" fill="#0d9488" radius={[0, 4, 4, 0]} barSize={8}>
-                                {CATEGORY_POPULARITY_DATA.map((entry, index) => (
-                                  <Cell 
-                                    key={`cell-${index}`} 
-                                    fill={
-                                      index === 0 ? '#fbbf24' : // Amber
-                                      index === 1 ? '#0d9488' : // Teal
-                                      index === 2 ? '#3b82f6' : // Blue
-                                      '#8b5cf6'                 // Purple
-                                    } 
-                                  />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
+                        <div className="h-24 w-full flex justify-center">
+                          <BarChart width={250} height={96} data={CATEGORY_POPULARITY_DATA} layout="vertical" margin={{ top: 2, right: 5, left: -14, bottom: 0 }}>
+                            <XAxis type="number" hide />
+                            <YAxis 
+                              dataKey="name" 
+                              type="category" 
+                              stroke="#94a3b8" 
+                              fontSize={7.5} 
+                              fontWeight="bold" 
+                              tickLine={false} 
+                              axisLine={false}
+                              width={54}
+                            />
+                            <Tooltip 
+                              contentStyle={{ 
+                                fontSize: '7.5px', 
+                                padding: '4px', 
+                                borderRadius: '6px', 
+                                background: isDarkMode ? '#0f172a' : '#ffffff',
+                                border: isDarkMode ? '1px solid #1e293b' : '1px solid #e2e8f0',
+                                color: isDarkMode ? '#f8fafc' : '#0f172a'
+                              }}
+                            />
+                            <Bar dataKey="count" fill="#0d9488" radius={[0, 4, 4, 0]} barSize={8}>
+                              {CATEGORY_POPULARITY_DATA.map((entry, index) => (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={
+                                    index === 0 ? '#fbbf24' : // Amber
+                                    index === 1 ? '#0d9488' : // Teal
+                                    index === 2 ? '#3b82f6' : // Blue
+                                    '#8b5cf6'                 // Purple
+                                  } 
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
                         </div>
                       </div>
                     </div>
@@ -3866,7 +3862,7 @@ export default function PhoneSimulator({
                       setCustomerScreen('tracking');
                     }
                   } else {
-                    alert('You have no active booking to track. Search services to raise a professional request!');
+                    triggerToast('No Active Booking', 'You have no active booking to track. Search services to raise a professional request!', 'alert');
                   }
                 }}
                 className={`flex flex-col items-center gap-0.5 cursor-pointer relative ${

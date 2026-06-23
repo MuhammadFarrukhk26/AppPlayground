@@ -8,9 +8,24 @@
         var originalConsoleError = console.error;
         console.error = function() {
           var args = Array.prototype.slice.call(arguments);
-          var argStr = args.map(function(arg) {
-            return String(arg || '');
-          }).join(' ');
+          var argStr = "";
+          try {
+            for (var i = 0; i < args.length; i++) {
+              var val = "";
+              try {
+                if (args[i] === null || args[i] === undefined) {
+                  val = "";
+                } else if (typeof args[i] === "object") {
+                  val = args[i].message || args[i].name || Object.prototype.toString.call(args[i]);
+                } else {
+                  val = String(args[i]);
+                }
+              } catch (innerErr) {
+                val = "";
+              }
+              argStr += " " + val;
+            }
+          } catch (outerErr) {}
           
           var lower = argStr.toLowerCase();
           if (
@@ -28,9 +43,24 @@
         var originalConsoleWarn = console.warn;
         console.warn = function() {
           var args = Array.prototype.slice.call(arguments);
-          var argStr = args.map(function(arg) {
-            return String(arg || '');
-          }).join(' ');
+          var argStr = "";
+          try {
+            for (var i = 0; i < args.length; i++) {
+              var val = "";
+              try {
+                if (args[i] === null || args[i] === undefined) {
+                  val = "";
+                } else if (typeof args[i] === "object") {
+                  val = args[i].message || args[i].name || Object.prototype.toString.call(args[i]);
+                } else {
+                  val = String(args[i]);
+                }
+              } catch (innerErr) {
+                val = "";
+              }
+              argStr += " " + val;
+            }
+          } catch (outerErr) {}
           
           var lower = argStr.toLowerCase();
           if (
@@ -50,21 +80,46 @@
         } catch (e) {}
 
         window.onerror = function (message, source, lineno, colno, error) {
-          console.warn('Intercepted global unhandled error:', message, 'Source:', source, 'Line:', lineno);
-          return true; // Return true to completely prevent the error from bubbling or appearing as unhandled.
+          var msg = String(message || '').toLowerCase();
+          if (
+            !message ||
+            msg.indexOf('script error') !== -1 ||
+            msg.indexOf('resizeobserver') !== -1 ||
+            msg.indexOf('loop limit') !== -1 ||
+            msg.indexOf('loop completed') !== -1
+          ) {
+            return true; // Silence completely
+          }
+          console.warn('Intercepted unhandled: ', message);
+          return true;
         };
 
         window.addEventListener('error', function (e) {
-          console.warn('Intercepted error event:', e.message || e, 'Filename:', e.filename);
-          e.stopImmediatePropagation();
-          e.preventDefault();
+          var msg = String(e.message || '').toLowerCase();
+          if (
+            !e.message ||
+            msg.indexOf('script error') !== -1 ||
+            msg.indexOf('resizeobserver') !== -1 ||
+            msg.indexOf('loop limit') !== -1 ||
+            msg.indexOf('loop completed') !== -1
+          ) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+          }
         }, true);
 
         window.addEventListener('unhandledrejection', function (e) {
-          var reasonMessage = e.reason ? (e.reason.message || String(e.reason)) : 'unknown';
-          console.warn('Intercepted unhandled promise rejection:', reasonMessage);
-          e.stopImmediatePropagation();
-          e.preventDefault();
+          var msg = e.reason ? String(e.reason.message || e.reason || '').toLowerCase() : '';
+          if (
+            !e.reason ||
+            msg.indexOf('script error') !== -1 ||
+            msg.indexOf('resizeobserver') !== -1 ||
+            msg.indexOf('loop limit') !== -1 ||
+            msg.indexOf('loop completed') !== -1
+          ) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+          }
         }, true);
       })();
     </script>

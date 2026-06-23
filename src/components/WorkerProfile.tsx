@@ -153,6 +153,7 @@ export const WorkerProfile: React.FC<WorkerProfileProps> = ({
                 src="https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=150&q=80"
                 alt="Ahmed Kamal Profile picture"
                 className="w-16 h-16 rounded-full object-cover border-4 border-teal-500/20"
+                referrerPolicy="no-referrer"
               />
               <span className="absolute bottom-0 right-1 bg-emerald-500 text-white p-0.5 rounded-full border border-white dark:border-slate-950">
                 <ShieldCheck size={10} className="fill-emerald-500" />

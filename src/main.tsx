@@ -12,16 +12,36 @@ if (typeof window !== 'undefined') {
   } catch (e) {}
 
   window.addEventListener('error', (e) => {
-    console.warn('Intercepted main.tsx error event:', e.message || e, 'Filename:', e.filename);
-    e.stopImmediatePropagation();
-    e.preventDefault();
+    const msg = String(e.message || '').toLowerCase();
+    if (
+      !e.message ||
+      msg.indexOf('script error') !== -1 ||
+      msg.indexOf('resizeobserver') !== -1 ||
+      msg.indexOf('loop limit') !== -1 ||
+      msg.indexOf('loop completed') !== -1
+    ) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      return;
+    }
+    console.warn('Intercepted main.tsx error event:', e.message || e);
   }, true);
 
   window.addEventListener('unhandledrejection', (e) => {
-    const reasonMessage = e.reason ? (e.reason.message || String(e.reason)) : 'unknown';
+    const reasonMessage = e.reason ? (e.reason.message || String(e.reason)) : '';
+    const msg = reasonMessage.toLowerCase();
+    if (
+      !e.reason ||
+      msg.indexOf('script error') !== -1 ||
+      msg.indexOf('resizeobserver') !== -1 ||
+      msg.indexOf('loop limit') !== -1 ||
+      msg.indexOf('loop completed') !== -1
+    ) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      return;
+    }
     console.warn('Intercepted main.tsx unhandled promise rejection:', reasonMessage);
-    e.stopImmediatePropagation();
-    e.preventDefault();
   }, true);
 }
 
