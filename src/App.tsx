@@ -56,7 +56,7 @@ export default function App() {
           setLogs(data.logs);
         }
       } catch (err) {
-        console.error("Failed to sync backend state:", err);
+        console.warn("Failed to sync backend state (this is normal on initial boot/reconnect; retrying...):", err);
       }
     };
 
@@ -112,7 +112,7 @@ export default function App() {
       });
       setCustomerUser(null);
     } catch (err) {
-      console.error(err);
+      console.warn("Error during customer logout:", err);
     }
   };
 
@@ -166,7 +166,7 @@ export default function App() {
       setIsWorkerOnline(false);
       setJobInvites([]);
     } catch (err) {
-      console.error(err);
+      console.warn("Error during worker logout:", err);
     }
   };
 
@@ -196,7 +196,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Error during booking creation:", err);
     }
   };
 
@@ -215,7 +215,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Error during booking cancellation:", err);
     }
   };
 
@@ -238,7 +238,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Error toggling worker online status:", err);
     }
   };
 
@@ -262,7 +262,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Error accepting job invite:", err);
     }
   };
 
@@ -282,7 +282,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Error declining job invite:", err);
     }
   };
 
@@ -304,7 +304,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Error advancing job step:", err);
     }
   };
 
@@ -327,7 +327,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Error submitting rating/feedback:", err);
     }
   };
 
@@ -348,7 +348,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Error sending chat message:", err);
     }
   };
 

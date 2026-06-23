@@ -1714,9 +1714,12 @@ export default function PhoneSimulator({
                         {/* Section Label: Common Issues */}
                         <div className="mb-2.5">
                           <h4 className={`font-bold text-2xs uppercase tracking-wider ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                            {language === 'en' ? `Common ${activeCategory.title} Issues` : `${language === 'en' ? activeCategory.title : (activeCategory.title === 'Electrical' ? 'الیکٹریکل' : activeCategory.title === 'Plumbing' ? 'پلمبنگ' : activeCategory.title === 'HVAC' ? 'ایئر کنڈیشنر' : 'کارپینٹر')} کے عام مسائل`}
+                            {language === 'en' 
+                              ? `Common ${activeCategory.title} Issues` 
+                              : `${activeCategory.key === 'electrician' ? 'الیکٹریکل' : activeCategory.key === 'plumber' ? 'پلمبنگ' : activeCategory.key === 'cctv' ? 'سی سی ٹی وی' : 'اپلائنسز'} کے عام مسائل`
+                            }
                           </h4>
-                          <p className="text-[10px] text-slate-405 text-slate-400">{language === 'en' ? 'Select an issue below to instantiate support' : 'مدد کے لیے نیچے سے مسئلہ منتخب کریں'}</p>
+                          <p className="text-[10px] text-slate-400">{language === 'en' ? 'Select an issue below to instantiate support' : 'مدد کے لیے نیچے سے مسئلہ منتخب کریں'}</p>
                         </div>
 
                         {/* Template list stack */}
@@ -3318,7 +3321,7 @@ export default function PhoneSimulator({
                               )}
                             </button>
                             <button
-                              onClick={onAdvanceJob}
+                              onClick={() => onAdvanceJob()}
                               className="bg-teal-600 hover:bg-teal-700 text-white font-bold p-2.5 rounded-xl text-center flex items-center justify-center gap-1.5 text-2xs transition-all shadow-md shadow-teal-600/10 cursor-pointer"
                             >
                               <Power size={11} />

@@ -20,7 +20,7 @@ export default function LogsStream({ logs }: LogsStreamProps) {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Failed to export activity logs:', error);
+      console.warn('Failed to export activity logs:', error);
     }
   };
 

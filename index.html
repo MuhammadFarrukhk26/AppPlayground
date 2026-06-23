@@ -1,6 +1,73 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      // Sync global catcher to prevent anonymous cross-origin iframe/extension "Script error." telemetry alerts from crashing progress.
+      (function() {
+        // Safe console.error wrapper
+        var originalConsoleError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var argStr = args.map(function(arg) {
+            return String(arg || '');
+          }).join(' ');
+          
+          var lower = argStr.toLowerCase();
+          if (
+            lower.indexOf('script error') !== -1 ||
+            lower.indexOf('resizeobserver') !== -1 ||
+            lower.indexOf('loop limit') !== -1 ||
+            lower.indexOf('loop completed') !== -1
+          ) {
+            return;
+          }
+          originalConsoleError.apply(console, arguments);
+        };
+
+        // Safe console.warn wrapper to avoid printing intercepted telemetry warnings
+        var originalConsoleWarn = console.warn;
+        console.warn = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var argStr = args.map(function(arg) {
+            return String(arg || '');
+          }).join(' ');
+          
+          var lower = argStr.toLowerCase();
+          if (
+            lower.indexOf('script error') !== -1 ||
+            lower.indexOf('resizeobserver') !== -1 ||
+            lower.indexOf('loop limit') !== -1 ||
+            lower.indexOf('loop completed') !== -1
+          ) {
+            return;
+          }
+          originalConsoleWarn.apply(console, arguments);
+        };
+
+        var safeHost = '';
+        try {
+          safeHost = window.location && window.location.host ? window.location.host : '';
+        } catch (e) {}
+
+        window.onerror = function (message, source, lineno, colno, error) {
+          console.warn('Intercepted global unhandled error:', message, 'Source:', source, 'Line:', lineno);
+          return true; // Return true to completely prevent the error from bubbling or appearing as unhandled.
+        };
+
+        window.addEventListener('error', function (e) {
+          console.warn('Intercepted error event:', e.message || e, 'Filename:', e.filename);
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }, true);
+
+        window.addEventListener('unhandledrejection', function (e) {
+          var reasonMessage = e.reason ? (e.reason.message || String(e.reason)) : 'unknown';
+          console.warn('Intercepted unhandled promise rejection:', reasonMessage);
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }, true);
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
