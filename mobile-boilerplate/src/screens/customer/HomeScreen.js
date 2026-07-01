@@ -6,14 +6,14 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useBooking } from '../../context/BookingContext';
+import { SCREEN_WIDTH, scale, scaleFont } from '../../utils/responsive';
 
-// Standard screen dimension fetchers
-const { width } = Dimensions.get('window');
-const GRID_ITEM_WIDTH = (width - 48) / 2;
+// Grid item width scales with the device's actual screen width
+const GRID_GAP = scale(16);
+const GRID_ITEM_WIDTH = (SCREEN_WIDTH - GRID_GAP * 3) / 2;
 
 // Categories supported with visual icons & descriptions
 const CATEGORIES = [
@@ -246,13 +246,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   greetingText: {
-    fontSize: 24,
+    fontSize: scaleFont(24),
     fontWeight: '800',
     color: '#1C1C1E',
     letterSpacing: -0.5,
   },
   taglineText: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     color: '#636366',
     marginTop: 4,
   },
@@ -260,12 +260,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: scaleFont(17),
     fontWeight: '700',
     color: '#1C1C1E',
   },
   sectionSubtitle: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#8E8E93',
     marginTop: 2,
   },
@@ -277,9 +277,9 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     width: GRID_ITEM_WIDTH,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+    borderRadius: scale(16),
+    padding: scale(16),
+    marginBottom: scale(14),
     borderWidth: 2,
     borderColor: 'transparent',
     shadowColor: '#000',
@@ -289,15 +289,15 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   iconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: scale(44),
+    height: scale(44),
+    borderRadius: scale(12),
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   gridItemTitle: {
-    fontSize: 15,
+    fontSize: scale(15),
     fontWeight: '700',
     color: '#1C1C1E',
     marginBottom: 4,

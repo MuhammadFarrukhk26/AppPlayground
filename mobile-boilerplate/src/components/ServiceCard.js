@@ -1,11 +1,11 @@
 import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-const { width } = Dimensions.get('window');
+import { SCREEN_WIDTH, scale, scaleFont } from '../utils/responsive';
 
 /**
  * ServiceCard is a highly polished reusable grid layout button.
+ * Sizing scales between small phones (iPhone SE, 375pt) and large phones (Pro Max, 430pt).
  */
 export default function ServiceCard({ title, icon, description, color, secondaryColor, isSelected, onPress }) {
   return (
@@ -19,7 +19,7 @@ export default function ServiceCard({ title, icon, description, color, secondary
       ]}
     >
       <View style={[styles.iconContainer, { backgroundColor: color || '#FF3B30' }]}>
-        <Ionicons name={icon || 'construct'} size={22} color="#FFFFFF" />
+        <Ionicons name={icon || 'construct'} size={scale(22)} color="#FFFFFF" />
       </View>
       <Text style={styles.title} numberOfLines={1}>{title}</Text>
       <Text style={styles.description} numberOfLines={2}>{description}</Text>
@@ -27,12 +27,14 @@ export default function ServiceCard({ title, icon, description, color, secondary
   );
 }
 
+const CARD_GAP = scale(16);
+
 const styles = StyleSheet.create({
   card: {
-    width: (width - 48) / 2,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+    width: (SCREEN_WIDTH - CARD_GAP * 3) / 2,
+    borderRadius: scale(16),
+    padding: scale(16),
+    marginBottom: scale(14),
     borderWidth: 2,
     borderColor: 'transparent',
     shadowColor: '#000',
@@ -45,22 +47,22 @@ const styles = StyleSheet.create({
     borderColor: '#000000',
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: scale(40),
+    height: scale(40),
+    borderRadius: scale(10),
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: scale(10),
   },
   title: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontWeight: '700',
     color: '#1C1C1E',
     marginBottom: 4,
   },
   description: {
-    fontSize: 11,
+    fontSize: scaleFont(11),
     color: '#636366',
-    lineHeight: 14,
+    lineHeight: scale(14),
   },
 });

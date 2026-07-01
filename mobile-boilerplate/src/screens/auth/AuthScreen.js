@@ -15,11 +15,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useBooking } from '../../context/BookingContext';
 
 export default function AuthScreen() {
-  const { loginUser } = useBooking();
-  
+  const { loginUser, registerUser, authError, isAuthLoading } = useBooking();
+
   const [isLogin, setIsLogin] = useState(true);
   const [role, setRole] = useState('customer'); // 'customer' or 'worker'
-  
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -32,13 +32,13 @@ export default function AuthScreen() {
       setName('Ayesha Khan');
       setEmail('ayesha@gmail.com');
       setPhone('+92 321 9876543');
-      setPassword('••••••••');
+      setPassword('password123');
       setRole('customer');
     } else {
       setName('Ahmed Kamal');
       setEmail('ahmed@gmail.com');
       setPhone('+92 300 1234567');
-      setPassword('••••••••');
+      setPassword('password123');
       setSpecialty('Electrician Specialist');
       setRole('worker');
     }
@@ -46,23 +46,17 @@ export default function AuthScreen() {
 
   const handleSubmit = () => {
     if (isLogin) {
-      // Login validation
       if (!email.trim() || !password.trim()) {
         alert('Please fill in both Email and Password fields.');
         return;
       }
-      // Simple credentials auto-mapping or fallback
-      const finalName = email.toLowerCase().includes('ayesha') ? 'Ayesha Khan' : (email.toLowerCase().includes('ahmed') ? 'Ahmed Kamal' : 'Guest User');
-      const finalPhone = email.toLowerCase().includes('ayesha') ? '+92 321 9876543' : '+92 300 1234567';
-      
-      loginUser(finalName, finalPhone, role, email);
+      loginUser(email.trim(), password);
     } else {
-      // Register validation
       if (!name.trim() || !email.trim() || !phone.trim() || !password.trim()) {
         alert('Please fill out all the configuration parameters.');
         return;
       }
-      loginUser(name, phone, role, email);
+      registerUser({ name: name.trim(), email: email.trim(), phone: phone.trim(), password, role, specialty });
     }
   };
 
@@ -217,12 +211,23 @@ export default function AuthScreen() {
               </View>
             </View>
 
+            {/* Error message from a failed login/register attempt */}
+            {authError ? (
+              <Text style={styles.errorText}>{authError}</Text>
+            ) : null}
+
             {/* Submit Action Button */}
-            <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
+            <TouchableOpacity
+              style={[styles.submitBtn, isAuthLoading && { opacity: 0.6 }]}
+              onPress={handleSubmit}
+              disabled={isAuthLoading}
+            >
               <Text style={styles.submitBtnText}>
-                {isLogin ? 'Sign In Securely' : 'Create Active Account'}
+                {isAuthLoading ? 'Please wait...' : isLogin ? 'Sign In Securely' : 'Create Active Account'}
               </Text>
-              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+              {!isAuthLoading && (
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+              )}
             </TouchableOpacity>
           </View>
 
@@ -401,6 +406,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     color: '#1C1C1E',
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    textAlign: 'center',
   },
   submitBtn: {
     backgroundColor: '#FF3B30',

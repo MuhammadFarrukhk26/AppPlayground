@@ -329,7 +329,20 @@ const NotificationBanner = () => {
 // ROOT STACK NAVIGATOR
 // Evaluates which role is currently configured and handles deep page stacks (like Booking modal, Job details)
 export default function AppNavigator() {
-  const { currentUser, userRole } = useBooking();
+  const { currentUser, userRole, isRestoringSession } = useBooking();
+
+  // Show a minimal branded splash while AsyncStorage loads the saved session.
+  // Without this, the Auth screen flashes for a split second before the user
+  // is redirected to their home screen — bad UX on every app restart.
+  if (isRestoringSession) {
+    return (
+      <View style={styles.splashContainer}>
+        <Ionicons name="construct" size={52} color="#FF3B30" />
+        <Text style={styles.splashTitle}>Haazir</Text>
+        <Text style={styles.splashSubtitle}>On-Demand Services</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -403,6 +416,24 @@ export default function AppNavigator() {
 }
 
 const styles = StyleSheet.create({
+  splashContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  splashTitle: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#1C1C1E',
+    marginTop: 12,
+    letterSpacing: -0.5,
+  },
+  splashSubtitle: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginTop: 4,
+  },
   tabBar: {
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
