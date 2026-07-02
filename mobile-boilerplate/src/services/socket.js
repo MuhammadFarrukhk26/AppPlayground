@@ -11,10 +11,11 @@ export function connectSocket(token) {
 
   socket = io(SOCKET_URL, {
     auth: { token },
-    transports: ['websocket'],
+    // Must match server: polling only (Vercel doesn't support WebSocket upgrades).
+    transports: ['polling'],
     reconnection: true,
     reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000,
+    reconnectionDelay: 2000,
   });
 
   socket.on('connect_error', (err) => {

@@ -162,9 +162,6 @@ export const BookingProvider = ({ children }) => {
       if (!mine) addLog(`[Chat] New message received.`);
     });
 
-    socket.on('worker:status', ({ isOnline }) => {
-      setIsWorkerOnline(isOnline);
-    });
   }, [addLog]);
 
   // ---------------------------------------------------------------------------
@@ -322,14 +319,19 @@ export const BookingProvider = ({ children }) => {
     }
   };
 
-  // Toggle worker availability — tells the server via socket so job broadcasts
-  // only go to workers who are actually online right now, regardless of device.
+  // Toggle worker availability — optimistically updates local state immediately so
+  // the switch responds instantly, then tells the server via socket. If the socket
+  // isn't connected yet (e.g. still polling on Vercel), the UI still reflects intent.
   const toggleWorkerOnline = () => {
-    const socket = getSocket();
-    if (!socket) return;
     const next = !isWorkerOnline;
-    socket.emit(next ? 'worker:goOnline' : 'worker:goOffline');
-    // isWorkerOnline state is updated by the 'worker:status' ack event from the server
+    setIsWorkerOnline(next); // optimistic update — don't wait for server ack
+    const socket = getSocket();
+    if (socket?.connected) {
+      socket.emit(next ? 'worker:goOnline' : 'worker:goOffline');
+    } else {
+      addLog('Socket not connected yet — status will sync when connection is established.');
+    }
+    addLog(`Worker toggled ${next ? 'ONLINE' : 'OFFLINE'}`);
   };
 
   // Worker flow: Accept an incoming Job Invitation

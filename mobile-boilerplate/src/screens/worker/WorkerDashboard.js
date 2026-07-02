@@ -11,9 +11,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useBooking } from '../../context/BookingContext';
+import { SCREEN_WIDTH, scale, scaleFont } from '../../utils/responsive';
 
 export default function WorkerDashboard({ navigation }) {
   const {
+    currentUser,
     isWorkerOnline,
     toggleWorkerOnline,
     jobInvites,
@@ -24,192 +26,226 @@ export default function WorkerDashboard({ navigation }) {
     switchRole,
   } = useBooking();
 
-  const handleJobPress = (job) => {
-    navigation.navigate('JobDetailsScreen', { job });
+  // Safely extract price regardless of whether it's a flat number or an object
+  const formatPrice = (price) => {
+    if (!price) return '0';
+    if (typeof price === 'number') return price.toLocaleString();
+    if (typeof price === 'object' && price.total != null) return price.total.toLocaleString();
+    return String(price);
   };
 
   return (
     <SafeAreaView style={styles.safeContainer}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
-        {/* Profile and Role toggle section */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+
+        {/* ── Profile Header ── */}
         <View style={styles.profileHeader}>
           <View style={styles.profileLeft}>
-            <Image 
-              source={{ uri: 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=150&q=80' }} 
-              style={styles.providerAvatar} 
-            />
+            <View style={styles.avatarWrapper}>
+              <Image
+                source={{ uri: 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=150&q=80' }}
+                style={styles.providerAvatar}
+              />
+              {/* Online indicator dot on avatar */}
+              <View style={[styles.onlineDot, { backgroundColor: isWorkerOnline ? '#34C759' : '#C7C7CC' }]} />
+            </View>
             <View style={styles.providerMeta}>
               <Text style={styles.welcomeText}>Welcome Back,</Text>
-              <Text style={styles.providerName}>Ahmed Kamal</Text>
+              <Text style={styles.providerName} numberOfLines={1}>
+                {currentUser?.name || 'Technician'}
+              </Text>
+              <Text style={styles.specialtyText}>{currentUser?.specialty || 'General Services'}</Text>
             </View>
           </View>
-          
-          <TouchableOpacity 
-            style={styles.roleToggleBtn} 
+
+          <TouchableOpacity
+            style={styles.roleToggleBtn}
             onPress={() => switchRole('customer')}
           >
-            <Ionicons name="people" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={styles.roleToggleText}>Customer View</Text>
+            <Ionicons name="people" size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
+            <Text style={styles.roleToggleText}>Customer</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Availability Toggle Switch Card */}
-        <View style={styles.configCard}>
-          <View style={styles.configLabelCol}>
-            <Text style={styles.configHeader}>Online Availability</Text>
-            <Text style={styles.configSubtitle}>
-              {isWorkerOnline ? 'You are active and visible to nearby jobs' : 'Turn on to start receiving local job alerts'}
-            </Text>
+        {/* ── Online / Offline Toggle ── */}
+        <View style={[styles.configCard, isWorkerOnline && styles.configCardOnline]}>
+          <View style={styles.configLeft}>
+            <View style={[styles.statusDot, { backgroundColor: isWorkerOnline ? '#34C759' : '#C7C7CC' }]} />
+            <View style={styles.configLabelCol}>
+              <Text style={styles.configHeader}>
+                {isWorkerOnline ? 'You are Online' : 'You are Offline'}
+              </Text>
+              <Text style={styles.configSubtitle}>
+                {isWorkerOnline
+                  ? 'Receiving nearby job alerts'
+                  : 'Toggle to start receiving job requests'}
+              </Text>
+            </View>
           </View>
           <Switch
             value={isWorkerOnline}
             onValueChange={toggleWorkerOnline}
-            trackColor={{ false: '#767577', true: '#34C759' }}
-            thumbColor={'#FFFFFF'}
+            trackColor={{ false: '#E5E5EA', true: '#34C759' }}
+            thumbColor="#FFFFFF"
+            ios_backgroundColor="#E5E5EA"
           />
         </View>
 
-        {/* Earnings Stats Panel */}
-        <View style={styles.earningsDashboard}>
-          <Text style={styles.earningsTitle}>Performance Today</Text>
-          <View style={styles.earningsGrid}>
-            <View style={styles.earningStatItem}>
-              <Text style={styles.earningLabel}>Total Earnings</Text>
-              <Text style={styles.earningValue}>PKR 4,800</Text>
+        {/* ── Stats Row ── */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>PKR 4,800</Text>
+            <Text style={styles.statLabel}>Today's Earnings</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>100%</Text>
+            <Text style={styles.statLabel}>Completion</Text>
+          </View>
+          <View style={styles.statCardLast}>
+            <View style={styles.ratingRow}>
+              <Ionicons name="star" size={scale(13)} color="#FFCC00" />
+              <Text style={[styles.statValue, { marginLeft: 3 }]}>4.88</Text>
             </View>
-            <View style={[styles.earningStatItem, { borderLeftWidth: 1, borderLeftColor: '#F2F2F7' }]}>
-              <Text style={earningLabel => styles.earningLabel}>Completion</Text>
-              <Text style={styles.earningValue}>100%</Text>
-            </View>
-            <View style={[styles.earningStatItem, { borderLeftWidth: 1, borderLeftColor: '#F2F2F7' }]}>
-              <Text style={styles.earningLabel}>Profile Rating</Text>
-              <View style={styles.ratingRow}>
-                <Ionicons name="star" size={14} color="#FFCC00" />
-                <Text style={[styles.earningValue, { marginLeft: 4 }]}>4.88</Text>
-              </View>
-            </View>
+            <Text style={styles.statLabel}>Rating</Text>
           </View>
         </View>
 
-        {/* SECTION FOR ACTIVE / ONGOING TASK IN MOTION */}
-        {activeBooking && activeBooking.status !== 'pending' && activeBooking.status !== 'completed' && (
-          <View style={styles.activeJobContainer}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Ongoing Job Assignment</Text>
-              <View style={styles.liveBadge}>
-                <Text style={styles.liveBadgeText}>IN PROGRESS</Text>
-              </View>
-            </View>
-
-            <View style={styles.activeJobCard}>
-              <View style={styles.activeJobHeader}>
-                <View>
-                  <Text style={styles.jobRefId}>{activeBooking.id}</Text>
-                  <Text style={styles.jobHeadingText}>{activeBooking.service} - {activeBooking.subService}</Text>
-                </View>
-                <Text style={styles.jobEstimatedPrice}>PKR {activeBooking.price.total * 100}</Text>
-              </View>
-              
-              <View style={styles.addressSection}>
-                <Ionicons name="location-sharp" size={16} color="#FF3B30" style={{ marginRight: 6 }} />
-                <Text style={styles.addressLocationText}>{activeBooking.address}</Text>
-              </View>
-
-              {/* Polish Client Contact Panel */}
-              <View style={styles.clientContactRow}>
-                <Ionicons name="person-circle-sharp" size={38} color="#FF3B30" style={{ marginRight: 8 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.clientSubLabel}>Contact Client</Text>
-                  <Text style={styles.clientNameLabel}>{activeBooking.customerName || 'Ayesha Khan'}</Text>
-                </View>
-                <View style={styles.clientActionsGroup}>
-                  <TouchableOpacity 
-                    style={styles.clientActionBtn}
-                    onPress={() => alert(`Dialing customer: ${activeBooking.customerPhone || '+92 321 9876543'}`)}
-                  >
-                    <Ionicons name="call" size={15} color="#007AFF" />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.clientActionBtn, { backgroundColor: '#FFF1F0', marginLeft: 8 }]}
-                    onPress={() => navigation.navigate('ChatScreen')}
-                  >
-                    <Ionicons name="chatbubble" size={15} color="#FF3B30" />
-                  </TouchableOpacity>
+        {/* ── Active Job Card ── */}
+        {activeBooking &&
+          activeBooking.status !== 'pending' &&
+          activeBooking.status !== 'completed' && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>Active Job</Text>
+                <View style={styles.liveBadge}>
+                  <Text style={styles.liveBadgeText}>
+                    {activeBooking.status.toUpperCase().replace('_', ' ')}
+                  </Text>
                 </View>
               </View>
 
-              <View style={styles.instructionContainer}>
-                <Text style={styles.instructionLabel}>Notes from customer:</Text>
-                <Text style={styles.instructionContent}>{activeBooking.description || 'No special instructions given.'}</Text>
-              </View>
+              <View style={styles.activeJobCard}>
+                {/* Job title + price */}
+                <View style={styles.activeJobHeader}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={styles.jobRefId} numberOfLines={1}>{activeBooking.id}</Text>
+                    <Text style={styles.jobHeadingText} numberOfLines={2}>
+                      {activeBooking.service} — {activeBooking.subService}
+                    </Text>
+                  </View>
+                  <Text style={styles.jobEstimatedPrice}>
+                    PKR {formatPrice(activeBooking.price)}
+                  </Text>
+                </View>
 
-              {/* Status control buttons to progress statuses */}
-              <View style={styles.statusActionControls}>
-                <Text style={styles.currentStatusStepLabel}>
-                  Current Status: <Text style={styles.boldStatus}>{activeBooking.status.toUpperCase().replace('_', ' ')}</Text>
-                </Text>
-                
-                <TouchableOpacity 
-                  style={styles.advanceStatusBtn}
-                  onPress={advanceJobStatus}
-                >
-                  <Ionicons name="play-forward" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                {/* Address */}
+                <View style={styles.addressSection}>
+                  <Ionicons name="location-sharp" size={scale(14)} color="#FF3B30" style={{ marginRight: 6 }} />
+                  <Text style={styles.addressLocationText} numberOfLines={2}>{activeBooking.address}</Text>
+                </View>
+
+                {/* Client contact row */}
+                <View style={styles.clientContactRow}>
+                  <Ionicons name="person-circle-sharp" size={scale(36)} color="#FF3B30" style={{ marginRight: 8 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.clientSubLabel}>Client</Text>
+                    <Text style={styles.clientNameLabel} numberOfLines={1}>
+                      {activeBooking.customerName || 'Customer'}
+                    </Text>
+                  </View>
+                  <View style={styles.clientActionsGroup}>
+                    <TouchableOpacity
+                      style={styles.clientActionBtn}
+                      onPress={() => alert(`Calling: ${activeBooking.customerPhone || 'N/A'}`)}
+                    >
+                      <Ionicons name="call" size={scale(14)} color="#007AFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.clientActionBtn, { backgroundColor: '#FFF1F0', marginLeft: 8 }]}
+                      onPress={() => navigation.navigate('ChatScreen')}
+                    >
+                      <Ionicons name="chatbubble" size={scale(14)} color="#FF3B30" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Notes */}
+                {!!activeBooking.description && (
+                  <View style={styles.notesBox}>
+                    <Text style={styles.notesLabel}>Customer Notes</Text>
+                    <Text style={styles.notesContent}>{activeBooking.description}</Text>
+                  </View>
+                )}
+
+                {/* Advance status */}
+                <TouchableOpacity style={styles.advanceStatusBtn} onPress={advanceJobStatus}>
+                  <Ionicons name="play-forward" size={scale(15)} color="#FFFFFF" style={{ marginRight: 6 }} />
                   <Text style={styles.advanceStatusBtnText}>
-                    {activeBooking.status === 'assigned' ? 'Mark as ARRIVED' : 'Mark as JOB COMPLETED'}
+                    {activeBooking.status === 'assigned' ? 'Mark Arrived' : 'Mark Completed'}
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* SECTION FOR INCOMING JOB INVITATIONS / OFFERS */}
-        <View style={styles.alertsContainer}>
-          <Text style={styles.sectionTitle}>Nearby Job Invites ({jobInvites.length})</Text>
-          
+        {/* ── Job Invites ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            Nearby Jobs {jobInvites.length > 0 ? `(${jobInvites.length})` : ''}
+          </Text>
+
           {!isWorkerOnline ? (
-            <View style={styles.offlinePlaceholder}>
-              <Ionicons name="notifications-off" size={48} color="#C7C7CC" />
-              <Text style={styles.placeholderLabel}>Offline Mode</Text>
-              <Text style={styles.placeholderText}>Toggle your online switch above to start polling live plumbing and electrical service requests.</Text>
+            <View style={styles.emptyCard}>
+              <Ionicons name="notifications-off-outline" size={scale(40)} color="#C7C7CC" />
+              <Text style={styles.emptyTitle}>You're Offline</Text>
+              <Text style={styles.emptyText}>
+                Toggle the switch above to start receiving job requests.
+              </Text>
             </View>
           ) : jobInvites.length === 0 ? (
-            <View style={styles.offlinePlaceholder}>
-              <Ionicons name="radar-outline" size={48} color="#007AFF" />
-              <Text style={styles.placeholderLabel}>Scanning for Requests...</Text>
-              <Text style={styles.placeholderText}>Waiting for nearby customers. Keep the app open to receive immediate labor requests.</Text>
+            <View style={styles.emptyCard}>
+              <Ionicons name="radar-outline" size={scale(40)} color="#007AFF" />
+              <Text style={styles.emptyTitle}>Scanning for Jobs...</Text>
+              <Text style={styles.emptyText}>
+                Keep the app open. Job requests will appear here instantly.
+              </Text>
             </View>
           ) : (
             jobInvites.map((invite) => (
-              <View key={invite.id} style={styles.alertCard}>
-                <View style={styles.alertCardHeader}>
+              <View key={invite.id} style={styles.inviteCard}>
+                {/* Header: category badge + price */}
+                <View style={styles.inviteHeader}>
                   <View style={styles.alertBadge}>
                     <Text style={styles.alertBadgeText}>{invite.service}</Text>
                   </View>
-                  <Text style={styles.alertPriceText}>PKR {invite.price.total * 100}</Text>
+                  <Text style={styles.invitePrice}>PKR {formatPrice(invite.price)}</Text>
                 </View>
 
-                {/* Body details */}
-                <Text style={styles.alertTitle}>{invite.subService}</Text>
-                <Text style={styles.alertLocation} numberOfLines={1}>
-                  <Ionicons name="location" size={12} color="#8E8E93" /> {invite.address}
-                </Text>
-                <Text style={styles.alertDistance}>
-                  <Ionicons name="navigate" size={12} color="#007AFF" /> {invite.distance} • Urgent Repair Required
-                </Text>
+                <Text style={styles.inviteTitle} numberOfLines={2}>{invite.subService}</Text>
 
-                {/* Job invitation controls */}
-                <View style={styles.alertBtnGroup}>
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, styles.declineBtn]}
+                <View style={styles.inviteMetaRow}>
+                  <Ionicons name="location" size={scale(12)} color="#8E8E93" />
+                  <Text style={styles.inviteMetaText} numberOfLines={1}>{invite.address}</Text>
+                </View>
+                <View style={styles.inviteMetaRow}>
+                  <Ionicons name="navigate" size={scale(12)} color="#007AFF" />
+                  <Text style={[styles.inviteMetaText, { color: '#007AFF' }]}>
+                    {invite.distance}
+                  </Text>
+                </View>
+
+                <View style={styles.inviteBtnRow}>
+                  <TouchableOpacity
+                    style={[styles.inviteBtn, styles.declineBtn]}
                     onPress={() => declineJobInvite(invite.id)}
                   >
                     <Text style={styles.declineBtnText}>Decline</Text>
                   </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, styles.acceptBtn]}
+                  <TouchableOpacity
+                    style={[styles.inviteBtn, styles.acceptBtn]}
                     onPress={() => acceptJobInvite(invite.id)}
                   >
                     <Text style={styles.acceptBtnText}>Accept Job</Text>
@@ -226,151 +262,129 @@ export default function WorkerDashboard({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeContainer: {
-    flex: 1,
-    backgroundColor: '#FAFAFC',
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
+  safeContainer: { flex: 1, backgroundColor: '#F2F2F7' },
+  scrollContent: { padding: scale(16), paddingBottom: scale(48) },
+
+  /* Profile header */
   profileHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: scale(16),
   },
-  profileLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  // flex:1 + minWidth:0 allows text to truncate instead of pushing button off screen
+  profileLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: scale(8) },
+  avatarWrapper: { position: 'relative', marginRight: scale(12), flexShrink: 0 },
   providerAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: scale(48),
+    height: scale(48),
+    borderRadius: scale(24),
     borderWidth: 2,
-    borderColor: '#34C759',
+    borderColor: '#E5E5EA',
   },
-  providerMeta: {
-    marginLeft: 12,
+  onlineDot: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+    width: scale(12),
+    height: scale(12),
+    borderRadius: scale(6),
+    borderWidth: 2,
+    borderColor: '#F2F2F7',
   },
-  welcomeText: {
-    fontSize: 11,
-    color: '#8E8E93',
-  },
-  providerName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
+  // minWidth:0 here is critical — without it, long names expand beyond the row
+  providerMeta: { flex: 1, minWidth: 0 },
+  welcomeText: { fontSize: scaleFont(11), color: '#8E8E93' },
+  providerName: { fontSize: scaleFont(16), fontWeight: '700', color: '#1C1C1E' },
+  specialtyText: { fontSize: scaleFont(11), color: '#FF3B30', fontWeight: '600', marginTop: 1 },
   roleToggleBtn: {
     backgroundColor: '#1C1C1E',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingHorizontal: scale(10),
+    paddingVertical: scale(7),
+    borderRadius: scale(14),
+    flexShrink: 0, // never shrink — always visible even on narrow screens
   },
-  roleToggleText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
-  },
+  roleToggleText: { color: '#FFFFFF', fontSize: scaleFont(11), fontWeight: '600' },
+
+  /* Online toggle card */
   configCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E5E5EA',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: scale(16),
+    padding: scale(14),
+    marginBottom: scale(14),
   },
-  configLabelCol: {
+  configCardOnline: { borderColor: '#34C759', backgroundColor: '#F0FFF4' },
+  configLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: scale(10) },
+  statusDot: {
+    width: scale(10),
+    height: scale(10),
+    borderRadius: scale(5),
+    marginRight: scale(10),
+    flexShrink: 0,
+  },
+  configLabelCol: { flex: 1, minWidth: 0 },
+  configHeader: { fontSize: scaleFont(14), fontWeight: '700', color: '#1C1C1E' },
+  configSubtitle: { fontSize: scaleFont(11), color: '#8E8E93', marginTop: 2 },
+
+  /* Stats row — use marginRight instead of gap for RN 0.73 compat */
+  statsRow: {
+    flexDirection: 'row',
+    marginBottom: scale(20),
+  },
+  statCard: {
     flex: 1,
-    marginRight: 10,
-  },
-  configHeader: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
-  configSubtitle: {
-    fontSize: 11,
-    color: '#8E8E93',
-    lineHeight: 14,
-    marginTop: 2,
-  },
-  earningsDashboard: {
     backgroundColor: '#FFFFFF',
+    borderRadius: scale(14),
+    padding: scale(12),
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E5E5EA',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
+    marginRight: scale(10),
   },
-  earningsTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1C1C1E',
-    marginBottom: 12,
-  },
-  earningsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  earningStatItem: {
+  statCardLast: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: scale(14),
+    padding: scale(12),
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
   },
-  earningLabel: {
-    fontSize: 10,
-    color: '#8E8E93',
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  earningValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1C1C1E',
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  activeJobContainer: {
-    marginBottom: 24,
-  },
+  statValue: { fontSize: scaleFont(14), fontWeight: '800', color: '#1C1C1E' },
+  statLabel: { fontSize: scaleFont(9), color: '#8E8E93', marginTop: 3, textAlign: 'center' },
+  ratingRow: { flexDirection: 'row', alignItems: 'center' },
+
+  /* Section wrapper */
+  section: { marginBottom: scale(20) },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: scale(10),
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
+  sectionTitle: { fontSize: scaleFont(16), fontWeight: '700', color: '#1C1C1E' },
   liveBadge: {
-    backgroundColor: '#FFE5E5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    backgroundColor: '#FFF1F0',
+    paddingHorizontal: scale(8),
+    paddingVertical: scale(3),
+    borderRadius: scale(6),
   },
-  liveBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#FF3B30',
-  },
+  liveBadgeText: { fontSize: scaleFont(9), fontWeight: '800', color: '#FF3B30' },
+
+  /* Active job card */
   activeJobCard: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#FFCC00',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: scale(16),
+    padding: scale(14),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -381,218 +395,127 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    marginBottom: scale(10),
+    paddingBottom: scale(10),
     borderBottomWidth: 1,
     borderBottomColor: '#F2F2F7',
-    paddingBottom: 10,
-    marginBottom: 10,
   },
   jobRefId: {
-    fontSize: 10,
+    fontSize: scaleFont(9),
     fontWeight: '700',
     color: '#FF3B30',
     backgroundColor: '#FFF1F0',
     alignSelf: 'flex-start',
-    paddingHorizontal: 6,
+    paddingHorizontal: scale(6),
     paddingVertical: 2,
     borderRadius: 4,
     marginBottom: 4,
   },
-  jobHeadingText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
-  jobEstimatedPrice: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FF3B30',
-  },
+  jobHeadingText: { fontSize: scaleFont(14), fontWeight: '700', color: '#1C1C1E' },
+  jobEstimatedPrice: { fontSize: scaleFont(15), fontWeight: '800', color: '#FF3B30' },
   addressSection: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: scale(10),
+  },
+  addressLocationText: { fontSize: scaleFont(12), color: '#3A3A3C', flex: 1 },
+  clientContactRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    backgroundColor: '#F9F9F9',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: scale(12),
+    padding: scale(10),
+    marginBottom: scale(10),
   },
-  addressLocationText: {
-    fontSize: 12,
-    color: '#3A3A3C',
-    fontWeight: '500',
-    flex: 1,
-  },
-  instructionContainer: {
+  clientSubLabel: { fontSize: scaleFont(9), color: '#8E8E93', fontWeight: '600', textTransform: 'uppercase' },
+  clientNameLabel: { fontSize: scaleFont(13), fontWeight: '700', color: '#1C1C1E' },
+  clientActionsGroup: { flexDirection: 'row' },
+  clientActionBtn: {
+    width: scale(32),
+    height: scale(32),
+    borderRadius: scale(16),
     backgroundColor: '#F2F2F7',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  instructionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1C1C1E',
+  notesBox: {
+    backgroundColor: '#F2F2F7',
+    borderRadius: scale(10),
+    padding: scale(10),
+    marginBottom: scale(12),
   },
-  instructionContent: {
-    fontSize: 11,
-    color: '#636366',
-    marginTop: 2,
-    lineHeight: 14,
-  },
-  statusActionControls: {
-    borderTopWidth: 1,
-    borderTopColor: '#F2F2F7',
-    paddingTop: 12,
-  },
-  currentStatusStepLabel: {
-    fontSize: 12,
-    color: '#636366',
-    textAlign: 'center',
-  },
-  boldStatus: {
-    fontWeight: '700',
-    color: '#007AFF',
-  },
+  notesLabel: { fontSize: scaleFont(10), fontWeight: '700', color: '#1C1C1E', marginBottom: 2 },
+  notesContent: { fontSize: scaleFont(11), color: '#636366', lineHeight: scale(15) },
   advanceStatusBtn: {
     backgroundColor: '#34C759',
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginTop: 10,
+    paddingVertical: scale(13),
+    borderRadius: scale(12),
+    marginTop: scale(4),
   },
-  advanceStatusBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  alertsContainer: {
-    marginTop: 8,
-  },
-  offlinePlaceholder: {
+  advanceStatusBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: scaleFont(13) },
+
+  /* Empty state card */
+  emptyCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: scale(16),
     borderWidth: 1,
     borderColor: '#E5E5EA',
-    padding: 24,
+    padding: scale(24),
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: scale(10),
   },
-  placeholderLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1C1C1E',
-    marginTop: 12,
-  },
-  placeholderText: {
-    fontSize: 12,
-    color: '#8E8E93',
-    textAlign: 'center',
-    lineHeight: 16,
-    marginTop: 6,
-  },
-  alertCard: {
+  emptyTitle: { fontSize: scaleFont(15), fontWeight: '700', color: '#1C1C1E', marginTop: scale(10) },
+  emptyText: { fontSize: scaleFont(12), color: '#8E8E93', textAlign: 'center', lineHeight: scale(16), marginTop: 5 },
+
+  /* Invite cards */
+  inviteCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E5E5EA',
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 12,
+    borderRadius: scale(16),
+    padding: scale(14),
+    marginTop: scale(12),
   },
-  alertCardHeader: {
+  inviteHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: scale(8),
   },
   alertBadge: {
     backgroundColor: '#E6F2FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: scale(8),
+    paddingVertical: scale(3),
+    borderRadius: scale(6),
   },
-  alertBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#007AFF',
+  alertBadgeText: { fontSize: scaleFont(10), fontWeight: '700', color: '#007AFF' },
+  invitePrice: { fontSize: scaleFont(15), fontWeight: '800', color: '#34C759' },
+  inviteTitle: { fontSize: scaleFont(14), fontWeight: '700', color: '#1C1C1E', marginBottom: scale(6) },
+  inviteMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: scale(3),
   },
-  alertPriceText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#34C759',
-  },
-  alertTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1C1C1E',
-    marginBottom: 6,
-  },
-  alertLocation: {
-    fontSize: 11,
-    color: '#636366',
-    marginBottom: 4,
-  },
-  alertDistance: {
-    fontSize: 11,
-    color: '#007AFF',
-    fontWeight: '600',
-    marginBottom: 14,
-  },
-  alertBtnGroup: {
+  inviteMetaText: { fontSize: scaleFont(11), color: '#636366', flex: 1, marginLeft: scale(5) },
+  inviteBtnRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: scale(12),
   },
-  actionBtn: {
+  inviteBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: scale(12),
+    borderRadius: scale(10),
     justifyContent: 'center',
     alignItems: 'center',
   },
-  declineBtn: {
-    backgroundColor: '#F2F2F7',
-    marginRight: 10,
-  },
-  declineBtnText: {
-    color: '#8E8E93',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  acceptBtn: {
-    backgroundColor: '#FF3B30',
-  },
-  acceptBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  clientContactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FAFAFC',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 12,
-  },
-  clientSubLabel: {
-    fontSize: 10,
-    color: '#8E8E93',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  clientNameLabel: {
-    fontSize: 13,
-    fontWeight: '750',
-    color: '#1C1C1E',
-  },
-  clientActionsGroup: {
-    flexDirection: 'row',
-  },
-  clientActionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F2F2F7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  declineBtn: { backgroundColor: '#F2F2F7', marginRight: scale(10) },
+  declineBtnText: { color: '#8E8E93', fontWeight: '600', fontSize: scaleFont(13) },
+  acceptBtn: { backgroundColor: '#FF3B30' },
+  acceptBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: scaleFont(13) },
 });
